@@ -1,0 +1,2938 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>L'Atelier Contemplatif — Déchiffrage Piano Infini</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Cormorant Garamond for score aesthetics, Inter & JetBrains Mono for studio controls -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,400;1,600&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <script>
+        // Configure Tailwind theme extensions for warm studio & parchment aesthetics
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        serif: ['Cormorant Garamond', 'serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        studio: {
+                            950: '#0f0e0c',
+                            900: '#171513',
+                            850: '#1f1c19',
+                            800: '#292521',
+                            700: '#3b352f',
+                            600: '#544b42',
+                            400: '#9e9284',
+                            200: '#dcd5cc',
+                        },
+                        parchment: {
+                            50: '#fbf9f4',
+                            100: '#f5f0e6',
+                            200: '#eadfce',
+                            300: '#dacab2',
+                            800: '#2c2620',
+                            900: '#1b1714',
+                        },
+                        amber: {
+                            450: '#e59a38',
+                        }
+                    }
+                }
+            }
+        };
+    </script>
+
+    <style>
+        /* Custom styling for scrollbars, sliders, and responsive canvas */
+        * {
+            box-sizing: border-box;
+            user-select: none;
+        }
+        body {
+            background-color: #12100e;
+            color: #e6dfd5;
+            overflow: hidden;
+        }
+        /* Custom subtle scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #171513;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3b352f;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #544b42;
+        }
+        /* Range input styling */
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            background: transparent;
+            cursor: pointer;
+        }
+        input[type="range"]::-webkit-slider-runnable-track {
+            background: #3b352f;
+            height: 5px;
+            border-radius: 3px;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            margin-top: -5px;
+            background-color: #e59a38;
+            height: 15px;
+            width: 15px;
+            border-radius: 50%;
+            border: 2px solid #171513;
+            transition: transform 0.15s ease, background-color 0.15s ease;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+            background-color: #f5b051;
+        }
+        /* Piano key transitions */
+        .piano-key-white {
+            transition: background-color 0.08s ease, transform 0.06s ease;
+        }
+        .piano-key-black {
+            transition: background-color 0.08s ease, transform 0.06s ease;
+        }
+        .piano-key-active {
+            transform: translateY(2px);
+        }
+        /* Subtle parchment grain overlay */
+        .parchment-surface {
+            background-image: radial-gradient(rgba(180, 155, 120, 0.06) 1px, transparent 0);
+            background-size: 20px 20px;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col font-sans antialiased selection:bg-amber-500/30">
+
+    <!-- ==================== TOP CONTROL BAR ==================== -->
+    <header class="h-16 bg-studio-900 border-b border-studio-800 px-3 lg:px-5 flex items-center justify-between gap-2 shrink-0 z-30 shadow-md">
+        <!-- Brand & Theme Quick Selector -->
+        <div class="flex items-center gap-3">
+            <button id="btnToggleDrawer" class="p-2 rounded-lg bg-studio-800 hover:bg-studio-700 text-studio-200 border border-studio-700/80 transition flex items-center gap-2 text-xs font-medium" title="Ouvrir/Fermer le panneau Scénarios & Paramétrage">
+                <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+                </svg>
+                <span class="hidden sm:inline">Paramétrage</span>
+            </button>
+
+            <div class="flex flex-col">
+                <div class="flex items-center gap-2">
+                    <h1 class="font-serif text-lg lg:text-xl font-semibold tracking-wide text-parchment-100 leading-none">L'Atelier Contemplatif</h1>
+                    <span id="activePresetBadge" class="hidden md:inline-block text-[11px] font-mono px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">Gymnopédie</span>
+                </div>
+                <span id="harmonicSummaryText" class="text-[11px] text-studio-400 font-mono hidden sm:block">Ré Dorien • 3/4 • Lecture infinie</span>
+            </div>
+        </div>
+
+        <!-- Transport & Playback Controls -->
+        <div class="flex items-center gap-1.5 sm:gap-2.5 bg-studio-950/80 px-2.5 py-1.5 rounded-xl border border-studio-800">
+            <!-- Play / Pause -->
+            <button id="btnPlayPause" class="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-studio-950 font-semibold text-xs flex items-center gap-1.5 shadow transition">
+                <svg id="iconPlay" class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z"/>
+                </svg>
+                <svg id="iconPause" class="w-4 h-4 hidden" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                </svg>
+                <span id="labelPlayPause">Lecture</span>
+            </button>
+
+            <!-- Step Next Beat / Measure -->
+            <button id="btnStepMeasure" class="p-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-studio-200 border border-studio-700 text-xs transition" title="Avancer d'un temps (Espace / Flèche droite)">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/>
+                </svg>
+            </button>
+
+            <!-- Regenerate New Stream -->
+            <button id="btnRegenerate" class="px-2.5 py-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-studio-200 border border-studio-700 text-xs flex items-center gap-1.5 transition" title="Générer un nouveau flux harmonique infini">
+                <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                <span class="hidden md:inline">Nouveau flux</span>
+            </button>
+
+            <div class="h-5 w-px bg-studio-800 mx-0.5 hidden sm:block"></div>
+
+            <!-- Tempo Slider -->
+            <div class="hidden sm:flex items-center gap-2 px-1">
+                <div class="flex flex-col text-right">
+                    <span class="text-[10px] uppercase tracking-wider text-studio-400">Tempo</span>
+                    <span id="valTempo" class="text-xs font-mono font-medium text-parchment-100">66 BPM</span>
+                </div>
+                <input id="sliderTempo" type="range" min="40" max="140" value="66" class="w-20 lg:w-24">
+            </div>
+
+            <div class="h-5 w-px bg-studio-800 mx-0.5 hidden lg:block"></div>
+
+            <!-- Scroll / Practice Mode -->
+            <div class="hidden lg:flex items-center gap-1.5">
+                <label for="selectScrollMode" class="text-[10px] uppercase tracking-wider text-studio-400">Mode:</label>
+                <select id="selectScrollMode" class="bg-studio-850 text-parchment-100 text-xs rounded-lg px-2 py-1 border border-studio-700 focus:outline-none focus:border-amber-500">
+                    <option value="continuous">Défilement continu</option>
+                    <option value="measure">Par mesure (Saut)</option>
+                    <option value="midi_wait">Attente MIDI / Clavier</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Right Controls: Felt Piano Ambiance, Metronome, Layout, MIDI Status -->
+        <div class="flex items-center gap-2">
+            <!-- Felt / Reverb Slider -->
+            <div class="hidden xl:flex items-center gap-2 bg-studio-950/60 px-2.5 py-1 rounded-lg border border-studio-800/80" title="Dosage du feutre et de la réverbération spatiale">
+                <span class="text-[10px] uppercase tracking-wider text-studio-400">Feutre & Reverb</span>
+                <input id="sliderReverb" type="range" min="0" max="100" value="68" class="w-16">
+            </div>
+
+            <!-- Metronome Toggle -->
+            <button id="btnMetronome" class="p-2 rounded-lg bg-studio-800 hover:bg-studio-700 text-studio-400 border border-studio-700 transition flex items-center gap-1 text-xs" title="Activer/Désactiver le métronome doux">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3L6 21h12L12 3zm0 6l5 6"/>
+                </svg>
+                <span class="hidden 2xl:inline">Métronome</span>
+            </button>
+
+            <!-- View Mode Toggle (Horizontal Ribbon vs Page Multi-System) -->
+            <button id="btnViewLayout" class="p-2 rounded-lg bg-studio-800 hover:bg-studio-700 text-parchment-200 border border-studio-700 transition flex items-center gap-1.5 text-xs" title="Basculer entre Ruban Horizontal et Page Multi-Systèmes">
+                <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                </svg>
+                <span id="labelViewLayout" class="hidden md:inline">Ruban</span>
+            </button>
+
+            <!-- Sheet Theme Toggle (Parchment vs Dark Nocturne) -->
+            <button id="btnSheetTheme" class="p-2 rounded-lg bg-studio-800 hover:bg-studio-700 text-parchment-200 border border-studio-700 transition text-xs" title="Changer le thème du papier (Parchemin Ivoire / Nocturne Sombre)">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+                </svg>
+            </button>
+
+            <!-- MIDI Status Pill -->
+            <div id="midiStatusBadge" class="px-2.5 py-1.5 rounded-lg bg-studio-850 border border-studio-700 flex items-center gap-1.5 text-xs cursor-pointer" title="État de l'entrée Web MIDI (vous pouvez aussi cliquer sur le clavier visuel en bas)">
+                <span id="midiStatusDot" class="w-2 h-2 rounded-full bg-studio-600"></span>
+                <span id="midiStatusText" class="text-[11px] font-mono text-studio-400 hidden sm:inline">MIDI: Simul.</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- ==================== MAIN WORKSPACE ==================== -->
+    <div class="flex-1 flex overflow-hidden relative">
+
+        <!-- LEFT COLLAPSIBLE CONFIGURATION DRAWER ("Scénarios & Paramétrage") -->
+        <aside id="configDrawer" class="w-80 sm:w-96 bg-studio-900/95 backdrop-blur-md border-r border-studio-800 flex flex-col shrink-0 transition-all duration-300 z-20 overflow-y-auto">
+            <div class="p-4 space-y-5">
+
+                <!-- 1. CONTEMPLATIVE STYLE PRESETS (THEMES) -->
+                <section>
+                    <div class="flex items-center justify-between mb-2">
+                        <h2 class="text-xs font-semibold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                            <span>1. Esthétiques & Thèmes</span>
+                        </h2>
+                        <span class="text-[10px] text-studio-400 font-mono">4 Moteurs</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button data-preset="gymnopedie" class="preset-btn text-left p-2.5 rounded-xl border border-amber-500/60 bg-amber-500/10 hover:bg-amber-500/15 transition group">
+                            <div class="font-serif font-semibold text-sm text-parchment-100 flex items-center justify-between">
+                                <span>Gymnopédie</span>
+                                <span class="text-[10px] font-mono text-amber-300">3/4</span>
+                            </div>
+                            <p class="text-[11px] text-studio-400 mt-0.5 leading-snug">Satie • Dorien/Majeur, pompe lente, accords Maj7 & m9.</p>
+                        </button>
+
+                        <button data-preset="minecraft" class="preset-btn text-left p-2.5 rounded-xl border border-studio-700 bg-studio-850 hover:bg-studio-800 transition group">
+                            <div class="font-serif font-semibold text-sm text-parchment-100 flex items-center justify-between">
+                                <span>Voxel Ambient</span>
+                                <span class="text-[10px] font-mono text-studio-400">4/4</span>
+                            </div>
+                            <p class="text-[11px] text-studio-400 mt-0.5 leading-snug">C418 • Lydien lumineux, add9, sus2, silences respirants.</p>
+                        </button>
+
+                        <button data-preset="skyrim" class="preset-btn text-left p-2.5 rounded-xl border border-studio-700 bg-studio-850 hover:bg-studio-800 transition group">
+                            <div class="font-serif font-semibold text-sm text-parchment-100 flex items-center justify-between">
+                                <span>Nordique & Brume</span>
+                                <span class="text-[10px] font-mono text-studio-400">4/4</span>
+                            </div>
+                            <p class="text-[11px] text-studio-400 mt-0.5 leading-snug">Soule • Éolien/Dorien, quintes profondes, chant en tierces.</p>
+                        </button>
+
+                        <button data-preset="licorice" class="preset-btn text-left p-2.5 rounded-xl border border-studio-700 bg-studio-850 hover:bg-studio-800 transition group">
+                            <div class="font-serif font-semibold text-sm text-parchment-100 flex items-center justify-between">
+                                <span>Licorice Néo</span>
+                                <span class="text-[10px] font-mono text-studio-400">4/4</span>
+                            </div>
+                            <p class="text-[11px] text-studio-400 mt-0.5 leading-snug">Néoclassique • ii9-V13-Imaj9, emprunt iv mineur, arpèges.</p>
+                        </button>
+                    </div>
+                </section>
+
+                <hr class="border-studio-800">
+
+                <!-- 2. TONALITÉ, MODE & MODULATION -->
+                <section class="space-y-3">
+                    <h2 class="text-xs font-semibold uppercase tracking-wider text-amber-400">2. Tonalité & Mode (Cycle des Quintes)</h2>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[11px] text-studio-400 mb-1">Tonique (Clé)</label>
+                            <select id="selectRootKey" class="w-full bg-studio-850 text-parchment-100 text-xs rounded-lg px-2.5 py-2 border border-studio-700 focus:outline-none focus:border-amber-500">
+                                <option value="C">Do (C) — 0 alt.</option>
+                                <option value="G">Sol (G) — 1 ♯</option>
+                                <option value="D" selected>Ré (D) — 2 ♯</option>
+                                <option value="A">La (A) — 3 ♯</option>
+                                <option value="E">Mi (E) — 4 ♯</option>
+                                <option value="F">Fa (F) — 1 ♭</option>
+                                <option value="Bb">Si♭ (Bb) — 2 ♭</option>
+                                <option value="Eb">Mi♭ (Eb) — 3 ♭</option>
+                                <option value="Ab">La♭ (Ab) — 4 ♭</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-[11px] text-studio-400 mb-1">Mode Harmonique</label>
+                            <select id="selectMode" class="w-full bg-studio-850 text-parchment-100 text-xs rounded-lg px-2.5 py-2 border border-studio-700 focus:outline-none focus:border-amber-500">
+                                <option value="major">Majeur (Ionien)</option>
+                                <option value="dorian" selected>Dorien (Contemplatif)</option>
+                                <option value="aeolian">Éolien (Mineur nat.)</option>
+                                <option value="lydian">Lydien (Rêveur ♯4)</option>
+                                <option value="mixolydian">Mixolydien (Pastoral ♭7)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Progressive Modulation Toggle -->
+                    <label class="flex items-center justify-between p-2 rounded-lg bg-studio-850/70 border border-studio-800 cursor-pointer">
+                        <div>
+                            <span class="text-xs text-parchment-100 font-medium block">Modulation progressive</span>
+                            <span class="text-[10px] text-studio-400">Évolue sur le cycle des quintes toutes les 8 mesures</span>
+                        </div>
+                        <input id="chkModulation" type="checkbox" class="w-4 h-4 accent-amber-500 rounded">
+                    </label>
+                </section>
+
+                <hr class="border-studio-800">
+
+                <!-- 3. RICHESSE HARMONIQUE & PATTERNS -->
+                <section class="space-y-3">
+                    <h2 class="text-xs font-semibold uppercase tracking-wider text-amber-400">3. Harmonie & Accompagnement</h2>
+
+                    <div>
+                        <label class="block text-[11px] text-studio-400 mb-1">Richesse Harmonique</label>
+                        <select id="selectHarmonicRichness" class="w-full bg-studio-850 text-parchment-100 text-xs rounded-lg px-2.5 py-2 border border-studio-700 focus:outline-none focus:border-amber-500">
+                            <option value="triads">Triades simples (Lecture fondamentale)</option>
+                            <option value="sevenths">Accords de 7ème (Maj7, m7, 7)</option>
+                            <option value="extensions" selected>Extensions contemplatives (9e, add9, sus2, 6/9)</option>
+                            <option value="borrowed">Emprunts modaux & Dominantes sec. (iv min, V/vi)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] text-studio-400 mb-1">Pattern Main Gauche (Clé de Fa)</label>
+                        <select id="selectLeftHandPattern" class="w-full bg-studio-850 text-parchment-100 text-xs rounded-lg px-2.5 py-2 border border-studio-700 focus:outline-none focus:border-amber-500">
+                            <option value="satie" selected>Pompe Satie (Basse temps 1 + Accord feutré)</option>
+                            <option value="arpeggio_slow">Arpèges brisés lents (1 - 5 - 8 - 10)</option>
+                            <option value="nordic_fifths">Quintes & Octaves ouvertes (Style Nordique)</option>
+                            <option value="sustained_voicing">Accords plaqués tenus (Voicings & Guide tones)</option>
+                            <option value="ostinato_eighths">Ostinato contemplatif (Croches régulières)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] text-studio-400 mb-1">Densité & Difficulté Main Droite (Clé de Sol)</label>
+                        <select id="selectRightHandDensity" class="w-full bg-studio-850 text-parchment-100 text-xs rounded-lg px-2.5 py-2 border border-studio-700 focus:outline-none focus:border-amber-500">
+                            <option value="1">Niveau 1 : Rondes & Blanches (Lecture calme)</option>
+                            <option value="2" selected>Niveau 2 : Noires, liaisons & soupirs (Mélodie lyrique)</option>
+                            <option value="3">Niveau 3 : Croches, syncopes & notes d'approche</option>
+                            <option value="4">Niveau 4 : Mélodie polyphonique (Tierces / Sixtes MD)</option>
+                        </select>
+                    </div>
+                </section>
+
+                <hr class="border-studio-800">
+
+                <!-- 4. CONTRAINTES DE DÉCHIFFRAGE -->
+                <section class="space-y-3">
+                    <h2 class="text-xs font-semibold uppercase tracking-wider text-amber-400">4. Contraintes de Déchiffrage</h2>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[11px] text-studio-400 mb-1">Signature Rythmique</label>
+                            <select id="selectTimeSig" class="w-full bg-studio-850 text-parchment-100 text-xs rounded-lg px-2.5 py-2 border border-studio-700">
+                                <option value="3/4" selected>3/4 (Valse lente / Satie)</option>
+                                <option value="4/4">4/4 (Ambient / Standard)</option>
+                                <option value="6/8">6/8 (Binaire composé)</option>
+                                <option value="5/4">5/4 (Asymétrique doux)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-[11px] text-studio-400 mb-1">Amplitude Intervalles</label>
+                            <select id="selectIntervalLeap" class="w-full bg-studio-850 text-parchment-100 text-xs rounded-lg px-2.5 py-2 border border-studio-700">
+                                <option value="stepwise">Conjoint & Tierces max</option>
+                                <option value="moderate" selected>Lyrique (Quintes / Sixtes)</option>
+                                <option value="wide">Grands sauts & Octaves</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <label class="flex items-center justify-between p-2 rounded-lg bg-studio-850/70 border border-studio-800 cursor-pointer">
+                        <div>
+                            <span class="text-xs text-parchment-100 font-medium block">Autoriser les lignes supplémentaires</span>
+                            <span class="text-[10px] text-studio-400">Étend la tessiture au-delà des 5 lignes</span>
+                        </div>
+                        <input id="chkLedgerLines" type="checkbox" checked class="w-4 h-4 accent-amber-500 rounded">
+                    </label>
+                </section>
+
+                <hr class="border-studio-800">
+
+                <!-- 5. AIDES VISUELLES PÉDAGOGIQUES -->
+                <section class="space-y-2">
+                    <h2 class="text-xs font-semibold uppercase tracking-wider text-amber-400">5. Aides Visuelles sur la Portée</h2>
+
+                    <label class="flex items-center justify-between p-2 rounded-lg bg-studio-850/70 border border-studio-800 cursor-pointer">
+                        <span class="text-xs text-parchment-100">Afficher le chiffrage d'accord (<code class="text-amber-300">Fmaj9</code>)</span>
+                        <input id="chkShowChords" type="checkbox" checked class="w-4 h-4 accent-amber-500 rounded">
+                    </label>
+
+                    <label class="flex items-center justify-between p-2 rounded-lg bg-studio-850/70 border border-studio-800 cursor-pointer">
+                        <span class="text-xs text-parchment-100">Afficher l'analyse en degrés (<code class="text-amber-300">IVΔ9</code>)</span>
+                        <input id="chkShowRoman" type="checkbox" checked class="w-4 h-4 accent-amber-500 rounded">
+                    </label>
+
+                    <label class="flex items-center justify-between p-2 rounded-lg bg-studio-850/70 border border-studio-800 cursor-pointer">
+                        <div>
+                            <span class="text-xs text-parchment-100 block">Colorer les Guide Tones (3ces & 7èmes)</span>
+                            <span class="text-[10px] text-amber-400/90">Met en évidence les notes caractéristiques</span>
+                        </div>
+                        <input id="chkHighlightGuideTones" type="checkbox" checked class="w-4 h-4 accent-amber-500 rounded">
+                    </label>
+
+                    <div class="flex items-center justify-between p-2 rounded-lg bg-studio-850/70 border border-studio-800">
+                        <span class="text-xs text-parchment-100">Nom des notes</span>
+                        <select id="selectNoteNames" class="bg-studio-900 text-parchment-100 text-xs rounded px-2 py-1 border border-studio-700">
+                            <option value="none">Masqué (Déchiffrage pur)</option>
+                            <option value="fr" selected>Solfège (Do, Ré, Mi)</option>
+                            <option value="en">Anglo-saxon (C, D, E)</option>
+                        </select>
+                    </div>
+                </section>
+
+                <hr class="border-studio-800">
+
+                <!-- 6. SAUVEGARDE DE SCÉNARIOS PERSONNALISÉS -->
+                <section class="space-y-2.5 pb-4">
+                    <h2 class="text-xs font-semibold uppercase tracking-wider text-amber-400">6. Mes Scénarios Sauvegardés</h2>
+                    <div class="flex gap-1.5">
+                        <input id="inputScenarioName" type="text" placeholder="Nom du scénario (ex: Dorien Calme)" class="flex-1 bg-studio-850 text-parchment-100 text-xs rounded-lg px-2.5 py-1.5 border border-studio-700 focus:outline-none focus:border-amber-500">
+                        <button id="btnSaveScenario" class="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-medium transition">
+                            Sauver
+                        </button>
+                    </div>
+                    <div id="savedScenariosList" class="space-y-1.5 max-h-36 overflow-y-auto"></div>
+                </section>
+
+            </div>
+        </aside>
+
+        <!-- ==================== MAIN SCORE VIEWPORT (GRAND STAFF) ==================== -->
+        <main class="flex-1 flex flex-col relative overflow-hidden">
+
+            <!-- Floating Score Info Bar -->
+            <div class="h-10 px-4 bg-studio-900/70 border-b border-studio-800/80 flex items-center justify-between text-xs shrink-0 z-10">
+                <div class="flex items-center gap-3">
+                    <span class="font-mono text-studio-400">Mesure <strong id="hudMeasureNum" class="text-parchment-100">1</strong></span>
+                    <span class="text-studio-700">•</span>
+                    <span class="font-mono text-studio-400">Accord actif : <strong id="hudCurrentChord" class="text-amber-400">Dm9</strong></span>
+                    <span class="text-studio-700 hidden sm:inline">•</span>
+                    <span class="font-mono text-studio-400 hidden sm:inline">Degré : <strong id="hudCurrentRoman" class="text-parchment-200">i9</strong></span>
+                </div>
+
+                <!-- Legend & Wait-for-MIDI prompt -->
+                <div class="flex items-center gap-4 text-[11px]">
+                    <div id="midiWaitBanner" class="hidden items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/50 text-amber-300 animate-pulse">
+                        <span>Attente des notes :</span>
+                        <strong id="midiExpectedNotesLabel" class="font-mono">Ré, Fa, La</strong>
+                    </div>
+                    <div class="hidden md:flex items-center gap-3 text-studio-400">
+                        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span> Guide Tone (3ce/7e)</span>
+                        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-sky-500 inline-block"></span> Main Droite</span>
+                        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span> Main Gauche</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Score Canvas Container -->
+            <div id="scoreViewportContainer" class="flex-1 relative overflow-y-auto overflow-x-hidden parchment-surface transition-colors duration-300 bg-[#f6f1e7]">
+                <canvas id="scoreCanvas" class="block w-full h-full cursor-pointer"></canvas>
+
+                <!-- Subtle Hint Overlay at bottom-right of canvas -->
+                <div class="absolute bottom-3 right-4 pointer-events-none flex items-center gap-2 px-3 py-1.5 rounded-lg bg-studio-900/75 text-parchment-200 text-[11px] backdrop-blur-sm border border-studio-700/60 shadow">
+                    <span>Astuce : Cliquez sur un temps de la partition pour l'écouter ou y placer le curseur • Espace = Lecture/Pause</span>
+                </div>
+            </div>
+
+            <!-- ==================== BOTTOM INTERACTIVE PIANO VISUALIZER ==================== -->
+            <footer class="h-32 sm:h-36 bg-studio-950 border-t border-studio-800 flex flex-col shrink-0 z-20 select-none">
+                <!-- Keyboard Top Trim Bar -->
+                <div class="h-6 px-4 bg-studio-900 border-b border-studio-850 flex items-center justify-between text-[11px] text-studio-400">
+                    <div class="flex items-center gap-2">
+                        <span class="font-mono uppercase tracking-wider text-[10px] text-studio-400">Clavier 88 Touches (A0 – C8)</span>
+                        <span id="activeNotesReadout" class="font-mono text-amber-400"></span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="hidden sm:inline text-[10px] text-studio-400">Cliquez ou glissez sur les touches pour jouer le piano feutré (valide aussi le mode Attente MIDI)</span>
+                    </div>
+                </div>
+
+                <!-- 88-Key Piano Canvas / DOM Interactive Strip -->
+                <div class="flex-1 relative w-full overflow-hidden bg-studio-950 px-1 pt-0.5 pb-1">
+                    <canvas id="pianoCanvas" class="w-full h-full block cursor-pointer"></canvas>
+                </div>
+            </footer>
+
+        </main>
+    </div>
+
+    <!-- ==================== APPLICATION LOGIC (SINGLE-FILE ENGINE) ==================== -->
+    <script>
+        /***********************************************************************
+         * 1. MUSIC THEORY & CONTEMPLATIVE HARMONY CONSTANTS
+         * All comments are written in English as required.
+         ***********************************************************************/
+
+        // Chromatic pitch names in English and French Solfege
+        const NOTE_NAMES_SHARP_EN = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        const NOTE_NAMES_FLAT_EN  = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+        const NOTE_NAMES_SHARP_FR = ['Do', 'Do♯', 'Ré', 'Ré♯', 'Mi', 'Fa', 'Fa♯', 'Sol', 'Sol♯', 'La', 'La♯', 'Si'];
+        const NOTE_NAMES_FLAT_FR  = ['Do', 'Ré♭', 'Ré', 'Mi♭', 'Mi', 'Fa', 'Sol♭', 'Sol', 'La♭', 'La', 'Si♭', 'Si'];
+
+        // Diatonic C major letter steps (0=C, 1=D, 2=E, 3=F, 4=G, 5=A, 6=B)
+        const DIATONIC_SEMITONES = [0, 2, 4, 5, 7, 9, 11];
+
+        // Circle of Fifths definitions for keys and key signature rendering
+        const KEY_SIGNATURES = {
+            'C':  { rootPc: 0,  sharps: 0, flats: 0, useFlats: false, labelFr: 'Do',  diatonicOffset: 0 },
+            'G':  { rootPc: 7,  sharps: 1, flats: 0, useFlats: false, labelFr: 'Sol', diatonicOffset: 4 },
+            'D':  { rootPc: 2,  sharps: 2, flats: 0, useFlats: false, labelFr: 'Ré',  diatonicOffset: 1 },
+            'A':  { rootPc: 9,  sharps: 3, flats: 0, useFlats: false, labelFr: 'La',  diatonicOffset: 5 },
+            'E':  { rootPc: 4,  sharps: 4, flats: 0, useFlats: false, labelFr: 'Mi',  diatonicOffset: 2 },
+            'F':  { rootPc: 5,  sharps: 0, flats: 1, useFlats: true,  labelFr: 'Fa',  diatonicOffset: 3 },
+            'Bb': { rootPc: 10, sharps: 0, flats: 2, useFlats: true,  labelFr: 'Si♭', diatonicOffset: 6 },
+            'Eb': { rootPc: 3,  sharps: 0, flats: 3, useFlats: true,  labelFr: 'Mi♭', diatonicOffset: 2 },
+            'Ab': { rootPc: 8,  sharps: 0, flats: 4, useFlats: true,  labelFr: 'La♭', diatonicOffset: 5 }
+        };
+
+        const CIRCLE_OF_FIFTHS_ORDER = ['Ab', 'Eb', 'Bb', 'F', 'C', 'G', 'D', 'A', 'E'];
+
+        // Modal intervals in semitones from the modal tonic
+        const MODE_INTERVALS = {
+            major:      [0, 2, 4, 5, 7, 9, 11], // Ionian
+            dorian:     [0, 2, 3, 5, 7, 9, 10], // Dorian (natural 6, flat 7)
+            aeolian:    [0, 2, 3, 5, 7, 8, 10], // Natural Minor
+            lydian:     [0, 2, 4, 6, 7, 9, 11], // Lydian (#4)
+            mixolydian: [0, 2, 4, 5, 7, 9, 10]  // Mixolydian (b7)
+        };
+
+        const MODE_LABELS_FR = {
+            major: 'Majeur',
+            dorian: 'Dorien',
+            aeolian: 'Éolien',
+            lydian: 'Lydien',
+            mixolydian: 'Mixolydien'
+        };
+
+        // Contemplative Style Presets configuration
+        const STYLE_PRESETS = {
+            gymnopedie: {
+                name: 'Gymnopédie',
+                tempo: 66,
+                rootKey: 'D',
+                mode: 'dorian',
+                timeSig: '3/4',
+                harmonicRichness: 'extensions',
+                leftHandPattern: 'satie',
+                rightHandDensity: '2',
+                intervalLeap: 'moderate',
+                reverb: 72
+            },
+            minecraft: {
+                name: 'Voxel Ambient',
+                tempo: 72,
+                rootKey: 'G',
+                mode: 'lydian',
+                timeSig: '4/4',
+                harmonicRichness: 'extensions',
+                leftHandPattern: 'arpeggio_slow',
+                rightHandDensity: '2',
+                intervalLeap: 'moderate',
+                reverb: 84
+            },
+            skyrim: {
+                name: 'Nordique & Brume',
+                tempo: 60,
+                rootKey: 'D',
+                mode: 'aeolian',
+                timeSig: '4/4',
+                harmonicRichness: 'sevenths',
+                leftHandPattern: 'nordic_fifths',
+                rightHandDensity: '4',
+                intervalLeap: 'moderate',
+                reverb: 88
+            },
+            licorice: {
+                name: 'Licorice Néo',
+                tempo: 76,
+                rootKey: 'F',
+                mode: 'major',
+                timeSig: '4/4',
+                harmonicRichness: 'borrowed',
+                leftHandPattern: 'ostinato_eighths',
+                rightHandDensity: '3',
+                intervalLeap: 'stepwise',
+                reverb: 65
+            }
+        };
+
+        /***********************************************************************
+         * 2. APPLICATION STATE
+         ***********************************************************************/
+        const AppState = {
+            // Playback state
+            isPlaying: false,
+            tempo: 66,
+            scrollMode: 'continuous', // 'continuous' | 'measure' | 'midi_wait'
+            viewLayout: 'ribbon',     // 'ribbon' | 'page'
+            sheetTheme: 'parchment',  // 'parchment' | 'dark'
+            metronomeEnabled: false,
+            reverbAmount: 0.68,
+
+            // Musical parameters
+            activePreset: 'gymnopedie',
+            rootKey: 'D',
+            mode: 'dorian',
+            progressiveModulation: false,
+            harmonicRichness: 'extensions',
+            leftHandPattern: 'satie',
+            rightHandDensity: 2,
+            timeSig: '3/4',
+            intervalLeap: 'moderate',
+            allowLedgerLines: true,
+
+            // Visual Aids
+            showChords: true,
+            showRoman: true,
+            highlightGuideTones: true,
+            noteNameMode: 'fr', // 'none' | 'fr' | 'en'
+
+            // Infinite Score Buffer & Playhead
+            measures: [],
+            currentMeasureIndex: 0,
+            currentBeatFloat: 0,     // Floating beat position within currentMeasureIndex
+            lastFrameTime: 0,
+            lastTriggeredSubBeat: -1,
+
+            // Voice-leading memory for smooth procedural generation
+            lastMelodyMidi: 69,      // A4
+            lastChordDegree: 0,      // 0-indexed scale degree
+            lastVoicingMidis: [50, 57, 60, 64],
+            generatedMeasureCounter: 0,
+
+            // Active notes for 88-key visualizer & MIDI Wait mode
+            activeScoreNotes: new Map(), // midi -> { hand: 'lh'|'rh', isGuideTone: bool, expiresAt: number }
+            activeMidiNotes: new Set(),  // Currently depressed MIDI / mouse keys
+            satisfiedSubBeatNotes: new Set() // Notes already matched in MIDI wait mode
+        };
+
+        /***********************************************************************
+         * 3. WEB AUDIO API — FELT PIANO SYNTHESIZER & REVERB ENGINE
+         ***********************************************************************/
+        class FeltPianoEngine {
+            constructor() {
+                this.ctx = null;
+                this.masterGain = null;
+                this.dryGain = null;
+                this.wetGain = null;
+                this.convolver = null;
+                this.isInitialized = false;
+            }
+
+            // Initialize AudioContext on first user interaction
+            init() {
+                if (this.isInitialized) {
+                    if (this.ctx.state === 'suspended') {
+                        this.ctx.resume();
+                    }
+                    return;
+                }
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AudioCtx();
+
+                this.masterGain = this.ctx.createGain();
+                this.masterGain.gain.value = 0.85;
+
+                // Create stereo compressor to prevent clipping on rich 9th chords
+                this.compressor = this.ctx.createDynamicsCompressor();
+                this.compressor.threshold.setValueAtTime(-18, this.ctx.currentTime);
+                this.compressor.knee.setValueAtTime(12, this.ctx.currentTime);
+                this.compressor.ratio.setValueAtTime(4, this.ctx.currentTime);
+                this.compressor.attack.setValueAtTime(0.005, this.ctx.currentTime);
+                this.compressor.release.setValueAtTime(0.25, this.ctx.currentTime);
+
+                this.dryGain = this.ctx.createGain();
+                this.wetGain = this.ctx.createGain();
+
+                // Build lush synthetic algorithmic impulse response for contemplative hall reverb
+                this.convolver = this.ctx.createConvolver();
+                this.convolver.buffer = this.createFeltReverbImpulse(3.6, 2.4);
+
+                this.masterGain.connect(this.dryGain);
+                this.masterGain.connect(this.convolver);
+                this.convolver.connect(this.wetGain);
+
+                this.dryGain.connect(this.compressor);
+                this.wetGain.connect(this.compressor);
+                this.compressor.connect(this.ctx.destination);
+
+                this.updateReverbMix(AppState.reverbAmount);
+                this.isInitialized = true;
+            }
+
+            // Generate warm stereo exponential decay impulse buffer with low-pass damping
+            createFeltReverbImpulse(durationSeconds, decayRate) {
+                const sampleRate = this.ctx.sampleRate;
+                const length = Math.floor(sampleRate * durationSeconds);
+                const impulse = this.ctx.createBuffer(2, length, sampleRate);
+
+                for (let ch = 0; ch < 2; ch++) {
+                    const data = impulse.getChannelData(ch);
+                    let lastSample = 0;
+                    for (let i = 0; i < length; i++) {
+                        const t = i / length;
+                        const env = Math.pow(1 - t, decayRate);
+                        // Filtered white noise for warm wooden hall tail
+                        const white = (Math.random() * 2 - 1);
+                        lastSample = lastSample * 0.82 + white * 0.18;
+                        data[i] = lastSample * env * 0.65;
+                    }
+                }
+                return impulse;
+            }
+
+            updateReverbMix(normValue) {
+                AppState.reverbAmount = normValue;
+                if (!this.isInitialized) return;
+                const now = this.ctx.currentTime;
+                this.dryGain.gain.setTargetAtTime(0.85 - normValue * 0.25, now, 0.05);
+                this.wetGain.gain.setTargetAtTime(normValue * 0.95, now, 0.05);
+            }
+
+            // Trigger a warm felt-piano note with hammer transient and detuned harmonics
+            playNote(midi, durationSec = 1.5, velocity = 0.65) {
+                this.init();
+                const now = this.ctx.currentTime;
+                const freq = 440 * Math.pow(2, (midi - 69) / 12);
+
+                // Register compensation so bass isn't muddy and treble is delicate
+                const registerScale = midi < 48 ? 0.85 : (midi > 76 ? 0.65 : 0.78);
+                const amp = Math.min(1, Math.max(0.1, velocity)) * registerScale * 0.28;
+
+                // Voice output envelope
+                const voiceGain = this.ctx.createGain();
+                voiceGain.gain.setValueAtTime(0.0001, now);
+                // Soft felt attack (14ms)
+                voiceGain.gain.linearRampToValueAtTime(amp, now + 0.014);
+                // Natural piano string initial decay into sustain
+                const releaseTime = Math.max(0.6, durationSec * 1.35);
+                voiceGain.gain.exponentialRampToValueAtTime(amp * 0.32, now + 0.35);
+                voiceGain.gain.exponentialRampToValueAtTime(0.0001, now + releaseTime + 0.4);
+
+                // Warm low-pass filter controlled by felt setting & velocity
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                const feltDamping = 1.0 - (AppState.reverbAmount * 0.35);
+                const baseCutoff = Math.min(6000, freq * (3.2 + velocity * 3.5) * feltDamping);
+                filter.frequency.setValueAtTime(baseCutoff * 1.5, now);
+                filter.frequency.exponentialRampToValueAtTime(Math.max(240, baseCutoff * 0.55), now + releaseTime * 0.8);
+                filter.Q.value = 0.7;
+
+                // Oscillator 1: Warm Triangle fundamental
+                const osc1 = this.ctx.createOscillator();
+                osc1.type = 'triangle';
+                osc1.frequency.setValueAtTime(freq, now);
+
+                // Oscillator 2: Pure Sine slightly detuned (unison string)
+                const osc2 = this.ctx.createOscillator();
+                osc2.type = 'sine';
+                osc2.frequency.setValueAtTime(freq, now);
+                osc2.detune.setValueAtTime(3.5, now); // +3.5 cents warm chorus
+
+                // Oscillator 3: Soft 2nd harmonic for body
+                const osc3 = this.ctx.createOscillator();
+                osc3.type = 'sine';
+                osc3.frequency.setValueAtTime(freq * 2, now);
+                const osc3Gain = this.ctx.createGain();
+                osc3Gain.gain.setValueAtTime(0.12, now);
+                osc3Gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+
+                // Subtle felt hammer thump (low-passed burst)
+                this.triggerFeltHammerTransient(now, amp * 0.25);
+
+                osc1.connect(filter);
+                osc2.connect(filter);
+                osc3.connect(osc3Gain);
+                osc3Gain.connect(filter);
+
+                filter.connect(voiceGain);
+                voiceGain.connect(this.masterGain);
+
+                osc1.start(now);
+                osc2.start(now);
+                osc3.start(now);
+
+                const stopAt = now + releaseTime + 0.45;
+                osc1.stop(stopAt);
+                osc2.stop(stopAt);
+                osc3.stop(stopAt);
+            }
+
+            // Soft mechanical felt hammer thud
+            triggerFeltHammerTransient(now, gainAmount) {
+                const osc = this.ctx.createOscillator();
+                const g = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(115, now);
+                osc.frequency.exponentialRampToValueAtTime(38, now + 0.035);
+
+                g.gain.setValueAtTime(gainAmount, now);
+                g.gain.exponentialRampToValueAtTime(0.0001, now + 0.04);
+
+                osc.connect(g);
+                g.connect(this.masterGain);
+                osc.start(now);
+                osc.stop(now + 0.045);
+            }
+
+            // Wooden soft metronome click
+            playMetronomeClick(isDownbeat = false) {
+                this.init();
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const g = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(isDownbeat ? 720 : 480, now);
+                osc.frequency.exponentialRampToValueAtTime(180, now + 0.03);
+
+                g.gain.setValueAtTime(isDownbeat ? 0.14 : 0.08, now);
+                g.gain.exponentialRampToValueAtTime(0.0001, now + 0.035);
+
+                osc.connect(g);
+                g.connect(this.dryGain);
+                osc.start(now);
+                osc.stop(now + 0.04);
+            }
+        }
+
+        const audioEngine = new FeltPianoEngine();
+
+        /***********************************************************************
+         * 4. PROCEDURAL MUSIC THEORY & VOICE-LEADING GENERATOR
+         ***********************************************************************/
+
+        // Convert MIDI pitch to pitch class (0-11)
+        function midiToPc(midi) {
+            return ((midi % 12) + 12) % 12;
+        }
+
+        // Format a pitch class into a readable note name based on current key signature
+        function formatPitchClass(pc, useFlats = false, lang = 'en') {
+            const idx = ((pc % 12) + 12) % 12;
+            if (lang === 'fr') {
+                return useFlats ? NOTE_NAMES_FLAT_FR[idx] : NOTE_NAMES_SHARP_FR[idx];
+            }
+            return useFlats ? NOTE_NAMES_FLAT_EN[idx] : NOTE_NAMES_SHARP_EN[idx];
+        }
+
+        // Get scale pitch classes (7 notes) for a given rootKey and mode
+        function getScalePitchClasses(rootKey, mode) {
+            const keyInfo = KEY_SIGNATURES[rootKey] || KEY_SIGNATURES['C'];
+            const intervals = MODE_INTERVALS[mode] || MODE_INTERVALS.major;
+            return intervals.map(semi => (keyInfo.rootPc + semi) % 12);
+        }
+
+        // Markov-inspired harmonic transition table tailored for contemplative styles
+        function chooseNextChordDegree(prevDegree, preset, mode, measureNumber) {
+            // Every 4 measures, favor resolving or establishing tonic/subdominant
+            if (measureNumber % 4 === 0) {
+                return Math.random() < 0.65 ? 0 : 3; // I or IV
+            }
+
+            if (preset === 'gymnopedie') {
+                // Satie loves alternating I <-> IV, or ii -> V -> I, or I -> vi -> ii -> V
+                const transitions = {
+                    0: [3, 3, 1, 5],
+                    3: [0, 0, 1, 4],
+                    1: [4, 0, 3],
+                    4: [0, 3, 5],
+                    5: [1, 3, 4],
+                    2: [5, 3],
+                    6: [0, 3]
+                };
+                const choices = transitions[prevDegree] || [0, 3, 1, 4];
+                return choices[Math.floor(Math.random() * choices.length)];
+            }
+
+            if (preset === 'minecraft') {
+                // C418 Lydian/Major: I <-> II, I -> IV -> vi -> V
+                const transitions = {
+                    0: [1, 3, 5, 4],
+                    1: [0, 3, 4],
+                    3: [0, 4, 5, 1],
+                    4: [0, 3, 5],
+                    5: [3, 1, 0],
+                    2: [3, 5],
+                    6: [0, 3]
+                };
+                const choices = transitions[prevDegree] || [0, 3, 1];
+                return choices[Math.floor(Math.random() * choices.length)];
+            }
+
+            if (preset === 'skyrim') {
+                // Soule Nordic modal: i - VII - IV - i, or i - VI - III - VII
+                const transitions = {
+                    0: [6, 5, 3, 2],
+                    6: [3, 0, 5],
+                    5: [2, 3, 6],
+                    3: [0, 6, 4],
+                    2: [6, 5, 3],
+                    4: [0, 5],
+                    1: [4, 6]
+                };
+                const choices = transitions[prevDegree] || [0, 6, 3, 5];
+                return choices[Math.floor(Math.random() * choices.length)];
+            }
+
+            // Licorice / Neo-classical contemplative: ii9 - V13 - Imaj9 - vi7 - iv(borrowed)
+            const transitions = {
+                0: [5, 1, 3],
+                5: [1, 3, 4],
+                1: [4, 3],
+                4: [0, 5, 2],
+                3: [0, 4, 1],
+                2: [5, 1],
+                6: [0, 5]
+            };
+            const choices = transitions[prevDegree] || [1, 4, 0, 5];
+            return choices[Math.floor(Math.random() * choices.length)];
+        }
+
+        // Build chord structure (root, 3rd, 5th, 7th, 9th, chord symbol, Roman numeral, guide tones)
+        function buildContemplativeChord(rootKey, mode, degree, richness, preset) {
+            const keyInfo = KEY_SIGNATURES[rootKey] || KEY_SIGNATURES['C'];
+            const scalePcs = getScalePitchClasses(rootKey, mode);
+
+            const rootPc = scalePcs[degree % 7];
+            let thirdPc = scalePcs[(degree + 2) % 7];
+            const fifthPc = scalePcs[(degree + 4) % 7];
+            let seventhPc = scalePcs[(degree + 6) % 7];
+            const ninthPc = scalePcs[(degree + 1) % 7];
+
+            // Handle modal borrowed chord (e.g. minor iv in Major or V7 in minor) when richness === 'borrowed'
+            let isBorrowedMinorIv = false;
+            let isSecondaryDom = false;
+            if (richness === 'borrowed') {
+                if (mode === 'major' && degree === 3 && Math.random() < 0.45) {
+                    // Borrow minor iv (flatten the 3rd of IV)
+                    thirdPc = (rootPc + 3) % 12;
+                    seventhPc = (rootPc + 10) % 12;
+                    isBorrowedMinorIv = true;
+                } else if (degree === 1 && Math.random() < 0.3) {
+                    // Secondary dominant V7/V (II7)
+                    thirdPc = (rootPc + 4) % 12;
+                    seventhPc = (rootPc + 10) % 12;
+                    isSecondaryDom = true;
+                }
+            }
+
+            // Compute intervals relative to chord root
+            const thirdInterval = (thirdPc - rootPc + 12) % 12; // 3 = minor, 4 = major
+            const fifthInterval = (fifthPc - rootPc + 12) % 12; // 7 = perfect, 6 = dim
+            const seventhInterval = (seventhPc - rootPc + 12) % 12; // 10 = m7, 11 = Maj7
+
+            const isMinor = thirdInterval === 3;
+            const isDim = fifthInterval === 6;
+            const isMaj7 = seventhInterval === 11;
+
+            // Construct Roman numeral base
+            const romanNumerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
+            let romanBase = romanNumerals[degree % 7];
+            if (isMinor || isDim) romanBase = romanBase.toLowerCase();
+            if (isDim) romanBase += '°';
+
+            const rootName = formatPitchClass(rootPc, keyInfo.useFlats, 'en');
+            let suffix = isMinor ? 'm' : (isDim ? 'dim' : '');
+            let romanSuffix = '';
+
+            // Determine active chord tones and extensions based on richness
+            const chordPcs = [rootPc, thirdPc, fifthPc];
+            const guideTonePcs = new Set([thirdPc]);
+
+            if (richness === 'sevenths' || richness === 'extensions' || richness === 'borrowed') {
+                chordPcs.push(seventhPc);
+                guideTonePcs.add(seventhPc);
+
+                if (!isDim) {
+                    if (isMaj7 && !isMinor) {
+                        suffix = 'maj7';
+                        romanSuffix = 'Δ7';
+                    } else if (!isMaj7 && !isMinor) {
+                        suffix = '7';
+                        romanSuffix = '7';
+                    } else if (isMinor && !isMaj7) {
+                        suffix = 'm7';
+                        romanSuffix = '7';
+                    }
+                }
+            }
+
+            if (richness === 'extensions' || (richness === 'borrowed' && !isDim)) {
+                // Add lush 9ths, add9, or sus2 for Minecraft / Gymnopédie / Licorice
+                const ninthInterval = (ninthPc - rootPc + 12) % 12;
+                if (ninthInterval === 2) {
+                    if (preset === 'minecraft' && Math.random() < 0.45 && !isMinor) {
+                        // Replace or augment with add9 / sus2
+                        chordPcs.push(ninthPc);
+                        suffix = isMaj7 ? 'maj9' : 'add9';
+                        romanSuffix = isMaj7 ? 'Δ9' : 'add9';
+                    } else if (Math.random() < 0.65) {
+                        chordPcs.push(ninthPc);
+                        if (isMaj7 && !isMinor) {
+                            suffix = 'maj9';
+                            romanSuffix = 'Δ9';
+                        } else if (isMinor) {
+                            suffix = 'm9';
+                            romanSuffix = '9';
+                        } else {
+                            suffix = '9';
+                            romanSuffix = '9';
+                        }
+                    }
+                }
+            }
+
+            if (isBorrowedMinorIv) {
+                suffix = 'm6';
+                romanSuffix = '6 (emp.)';
+            } else if (isSecondaryDom) {
+                suffix = '7';
+                romanBase = 'V/V';
+                romanSuffix = '';
+            }
+
+            return {
+                degree,
+                rootPc,
+                thirdPc,
+                fifthPc,
+                seventhPc,
+                ninthPc,
+                chordPcs,
+                guideTonePcs,
+                symbol: `${rootName}${suffix}`,
+                roman: `${romanBase}${romanSuffix}`
+            };
+        }
+
+        // Smooth voice-leading helper: find MIDI pitches for middle-register accompaniment (C3=48 to E4=64)
+        function buildSmoothLeftHandVoicing(chord, prevVoicingMidis) {
+            // Find bass root in C2 (36) to B2 (47)
+            let bassMidi = 36 + chord.rootPc;
+            if (bassMidi < 38) bassMidi += 12; // Keep bass resonant between D2 (38) and C#3 (49)
+            if (bassMidi > 49) bassMidi -= 12;
+
+            // Choose 3 upper voicing notes (3rd, 5th/9th, 7th) around F3 (53) to E4 (64)
+            const targetPcs = [
+                chord.thirdPc,
+                chord.seventhPc !== undefined ? chord.seventhPc : chord.fifthPc,
+                chord.ninthPc !== undefined && AppState.harmonicRichness === 'extensions' ? chord.ninthPc : chord.fifthPc
+            ];
+
+            // Ensure unique pitch classes
+            const uniquePcs = [...new Set(targetPcs)];
+            while (uniquePcs.length < 3) {
+                uniquePcs.push(chord.rootPc);
+            }
+
+            const centerMidi = 57; // A3 warm felt register
+            const upperMidis = uniquePcs.slice(0, 3).map(pc => {
+                // Find pitch class closest to centerMidi
+                let candidate = 48 + pc;
+                while (candidate < centerMidi - 5) candidate += 12;
+                while (candidate > centerMidi + 6) candidate -= 12;
+                return candidate;
+            }).sort((a, b) => a - b);
+
+            return {
+                bassMidi,
+                upperMidis
+            };
+        }
+
+        // Parse time signature into beats per measure
+        function getBeatsPerMeasure(timeSig) {
+            switch (timeSig) {
+                case '3/4': return 3;
+                case '4/4': return 4;
+                case '6/8': return 3; // Represented as 3 dotted-quarter beats (6 eighth subdivisions)
+                case '5/4': return 5;
+                default: return 4;
+            }
+        }
+
+        // Generate a single measure of both Left Hand (Bass Clef) and Right Hand (Treble Clef) events
+        function generateNextMeasure() {
+            const measureIndex = AppState.generatedMeasureCounter++;
+
+            // Handle optional Progressive Modulation along the Circle of Fifths every 8 measures
+            if (AppState.progressiveModulation && measureIndex > 0 && measureIndex % 8 === 0) {
+                const idx = CIRCLE_OF_FIFTHS_ORDER.indexOf(AppState.rootKey);
+                const dir = Math.random() < 0.65 ? 1 : -1;
+                const nextIdx = (idx + dir + CIRCLE_OF_FIFTHS_ORDER.length) % CIRCLE_OF_FIFTHS_ORDER.length;
+                AppState.rootKey = CIRCLE_OF_FIFTHS_ORDER[nextIdx];
+                const selectEl = document.getElementById('selectRootKey');
+                if (selectEl) selectEl.value = AppState.rootKey;
+                updateHeaderSummary();
+            }
+
+            const rootKey = AppState.rootKey;
+            const mode = AppState.mode;
+            const timeSig = AppState.timeSig;
+            const beatsPerMeasure = getBeatsPerMeasure(timeSig);
+            const richness = AppState.harmonicRichness;
+            const lhPattern = AppState.leftHandPattern;
+            const rhDensity = Number(AppState.rightHandDensity);
+
+            // Pick next chord degree via Markov table
+            const nextDegree = measureIndex === 0
+                ? 0
+                : chooseNextChordDegree(AppState.lastChordDegree, AppState.activePreset, mode, measureIndex);
+            AppState.lastChordDegree = nextDegree;
+
+            const chord = buildContemplativeChord(rootKey, mode, nextDegree, richness, AppState.activePreset);
+            const voicing = buildSmoothLeftHandVoicing(chord, AppState.lastVoicingMidis);
+            AppState.lastVoicingMidis = [voicing.bassMidi, ...voicing.upperMidis];
+
+            const lhEvents = [];
+            const rhEvents = [];
+
+            // ==================== 1. LEFT HAND (BASS CLEF) GENERATION ====================
+            if (lhPattern === 'satie') {
+                // Beat 0: Low Bass Root, Beat 1 (& 2): Warm middle-register chord voicing
+                lhEvents.push({
+                    startBeat: 0,
+                    durationBeats: 1,
+                    notes: [voicing.bassMidi],
+                    isRest: false
+                });
+                if (beatsPerMeasure === 3) {
+                    lhEvents.push({
+                        startBeat: 1,
+                        durationBeats: 2,
+                        notes: voicing.upperMidis,
+                        isRest: false
+                    });
+                } else {
+                    lhEvents.push({
+                        startBeat: 1,
+                        durationBeats: 2,
+                        notes: voicing.upperMidis,
+                        isRest: false
+                    });
+                    lhEvents.push({
+                        startBeat: 3,
+                        durationBeats: beatsPerMeasure - 3,
+                        notes: [voicing.upperMidis[0], voicing.upperMidis[2]],
+                        isRest: false
+                    });
+                }
+            } else if (lhPattern === 'arpeggio_slow') {
+                // Gentle quarter-note broken arpeggio (1 - 5 - 8 - 10)
+                const fifthMidi = voicing.bassMidi + 7;
+                const octaveMidi = voicing.bassMidi + 12;
+                const tenthMidi = voicing.upperMidis[0] > octaveMidi ? voicing.upperMidis[0] : voicing.upperMidis[0] + 12;
+                const arpPool = [voicing.bassMidi, fifthMidi, octaveMidi, tenthMidi, fifthMidi];
+                for (let b = 0; b < beatsPerMeasure; b++) {
+                    lhEvents.push({
+                        startBeat: b,
+                        durationBeats: 1,
+                        notes: [arpPool[b % arpPool.length]],
+                        isRest: false
+                    });
+                }
+            } else if (lhPattern === 'nordic_fifths') {
+                // Resonant open fifths and octaves (Skyrim style)
+                const fifthMidi = voicing.bassMidi + 7;
+                const octaveMidi = voicing.bassMidi + 12;
+                if (beatsPerMeasure >= 4) {
+                    lhEvents.push({
+                        startBeat: 0,
+                        durationBeats: 2,
+                        notes: [voicing.bassMidi, fifthMidi],
+                        isRest: false
+                    });
+                    lhEvents.push({
+                        startBeat: 2,
+                        durationBeats: beatsPerMeasure - 2,
+                        notes: [fifthMidi, octaveMidi],
+                        isRest: false
+                    });
+                } else {
+                    lhEvents.push({
+                        startBeat: 0,
+                        durationBeats: 2,
+                        notes: [voicing.bassMidi, fifthMidi, octaveMidi],
+                        isRest: false
+                    });
+                    lhEvents.push({
+                        startBeat: 2,
+                        durationBeats: 1,
+                        notes: [fifthMidi],
+                        isRest: false
+                    });
+                }
+            } else if (lhPattern === 'sustained_voicing') {
+                // Sustained close-voiced guide-tone chords
+                lhEvents.push({
+                    startBeat: 0,
+                    durationBeats: beatsPerMeasure,
+                    notes: [voicing.bassMidi, voicing.upperMidis[0], voicing.upperMidis[1]],
+                    isRest: false
+                });
+            } else if (lhPattern === 'ostinato_eighths') {
+                // Continuous eighth-note broken chords (Licorice / Neo-classical style)
+                const fifthMidi = voicing.bassMidi + 7;
+                const top1 = voicing.upperMidis[0];
+                const top2 = voicing.upperMidis[1];
+                const pattern = [voicing.bassMidi, fifthMidi, top1, fifthMidi, top2, fifthMidi, top1, fifthMidi];
+                const totalEighths = beatsPerMeasure * 2;
+                for (let e = 0; e < totalEighths; e++) {
+                    lhEvents.push({
+                        startBeat: e * 0.5,
+                        durationBeats: 0.5,
+                        notes: [pattern[e % pattern.length]],
+                        isRest: false
+                    });
+                }
+            }
+
+            // ==================== 2. RIGHT HAND (TREBLE CLEF) GENERATION ====================
+            const scalePcs = getScalePitchClasses(rootKey, mode);
+            const minMidi = AppState.allowLedgerLines ? 60 : 64; // C4 or E4
+            const maxMidi = AppState.allowLedgerLines ? 84 : 77; // C6 or F5
+
+            // Build pool of candidate scale MIDI notes in Treble Clef
+            const scaleMidis = [];
+            for (let m = minMidi; m <= maxMidi; m++) {
+                if (scalePcs.includes(midiToPc(m))) {
+                    scaleMidis.push(m);
+                }
+            }
+
+            // Helper to pick next lyrical melody note with controlled interval leap
+            const pickNextMelodyNote = (preferChordTone = false) => {
+                let maxSemis = 5;
+                if (AppState.intervalLeap === 'stepwise') maxSemis = 4;
+                if (AppState.intervalLeap === 'moderate') maxSemis = 7;
+                if (AppState.intervalLeap === 'wide') maxSemis = 12;
+
+                let candidates = scaleMidis.filter(m => Math.abs(m - AppState.lastMelodyMidi) <= maxSemis);
+                if (candidates.length === 0) candidates = scaleMidis;
+
+                if (preferChordTone) {
+                    const chordCandidates = candidates.filter(m => chord.chordPcs.includes(midiToPc(m)));
+                    if (chordCandidates.length > 0) candidates = chordCandidates;
+                }
+
+                // Slight tendency to avoid repeating the exact same note 3 times in a row
+                const nonRepeat = candidates.filter(m => m !== AppState.lastMelodyMidi);
+                const pool = (nonRepeat.length > 0 && Math.random() < 0.8) ? nonRepeat : candidates;
+
+                const chosen = pool[Math.floor(Math.random() * pool.length)];
+                AppState.lastMelodyMidi = chosen;
+                return chosen;
+            };
+
+            // Build rhythmic cells according to Right Hand Density level (1 to 4)
+            let beatCursor = 0;
+            while (beatCursor < beatsPerMeasure - 0.001) {
+                const remaining = beatsPerMeasure - beatCursor;
+
+                // Intentional breathing rest in Minecraft / Level 2
+                if (beatCursor > 0 && remaining >= 1 && Math.random() < (AppState.activePreset === 'minecraft' ? 0.25 : 0.14)) {
+                    rhEvents.push({
+                        startBeat: beatCursor,
+                        durationBeats: 1,
+                        notes: [],
+                        isRest: true
+                    });
+                    beatCursor += 1;
+                    continue;
+                }
+
+                let dur = 1;
+                if (rhDensity === 1) {
+                    // Calm half notes, dotted half notes, or whole notes
+                    if (remaining >= 3 && beatsPerMeasure === 3) dur = 3;
+                    else if (remaining >= 2) dur = 2;
+                    else dur = 1;
+                } else if (rhDensity === 2) {
+                    // Lyrical quarter notes and half notes
+                    if (remaining >= 2 && Math.random() < 0.42) dur = 2;
+                    else dur = 1;
+                } else if (rhDensity === 3) {
+                    // Flowing eighth notes mixed with quarters
+                    if (remaining >= 1 && Math.random() < 0.48) {
+                        // Pair of eighth notes
+                        const n1 = pickNextMelodyNote(beatCursor === 0);
+                        rhEvents.push({
+                            startBeat: beatCursor,
+                            durationBeats: 0.5,
+                            notes: [n1],
+                            isRest: false
+                        });
+                        const n2 = pickNextMelodyNote(false);
+                        rhEvents.push({
+                            startBeat: beatCursor + 0.5,
+                            durationBeats: 0.5,
+                            notes: [n2],
+                            isRest: false
+                        });
+                        beatCursor += 1;
+                        continue;
+                    } else {
+                        dur = (remaining >= 2 && Math.random() < 0.25) ? 2 : 1;
+                    }
+                } else if (rhDensity === 4) {
+                    // Polyphonic melody: harmonized in 3rds or 6ths
+                    dur = (remaining >= 2 && Math.random() < 0.45) ? 2 : 1;
+                }
+
+                const mainNote = pickNextMelodyNote(beatCursor === 0);
+                const notes = [mainNote];
+
+                // If Level 4 (Polyphonic), add a diatonic 3rd or 6th beneath the melody note
+                if (rhDensity === 4 && Math.random() < 0.72) {
+                    const idxInScale = scaleMidis.indexOf(mainNote);
+                    const harmonyOffset = Math.random() < 0.7 ? 2 : 5; // 3rd or 6th below
+                    if (idxInScale - harmonyOffset >= 0) {
+                        notes.unshift(scaleMidis[idxInScale - harmonyOffset]);
+                    }
+                }
+
+                rhEvents.push({
+                    startBeat: beatCursor,
+                    durationBeats: dur,
+                    notes,
+                    isRest: false,
+                    tieToNext: (dur >= 2 && beatCursor + dur >= beatsPerMeasure && Math.random() < 0.22)
+                });
+
+                beatCursor += dur;
+            }
+
+            return {
+                index: measureIndex,
+                rootKey,
+                mode,
+                timeSig,
+                beatsPerMeasure,
+                chord,
+                lhEvents,
+                rhEvents
+            };
+        }
+
+        // Populate initial sliding window of measures
+        function rebuildScoreStream() {
+            AppState.measures = [];
+            AppState.generatedMeasureCounter = 0;
+            AppState.currentMeasureIndex = 0;
+            AppState.currentBeatFloat = 0;
+            AppState.lastTriggeredSubBeat = -1;
+            AppState.lastChordDegree = 0;
+            AppState.lastMelodyMidi = 69;
+
+            for (let i = 0; i < 16; i++) {
+                AppState.measures.push(generateNextMeasure());
+            }
+            updateHeaderSummary();
+            updateHudInfo();
+            renderScore();
+            renderPianoKeyboard();
+        }
+
+        // Ensure infinite lookahead buffer always has at least 10 measures ahead of playhead
+        function ensureInfiniteBuffer() {
+            while (AppState.measures.length < AppState.currentMeasureIndex + 12) {
+                AppState.measures.push(generateNextMeasure());
+            }
+        }
+
+        // Regenerate upcoming measures seamlessly when a user tweaks any parameter live
+        function refreshUpcomingMeasuresLive() {
+            const keepUntil = AppState.currentMeasureIndex + 1;
+            AppState.measures = AppState.measures.slice(0, keepUntil);
+            AppState.generatedMeasureCounter = keepUntil;
+            ensureInfiniteBuffer();
+            updateHeaderSummary();
+            updateHudInfo();
+            renderScore();
+        }
+
+        /***********************************************************************
+         * 5. HIGH-DPI GRAND STAFF NOTATION RENDERER (CANVAS)
+         ***********************************************************************/
+        const scoreCanvas = document.getElementById('scoreCanvas');
+        const scoreCtx = scoreCanvas.getContext('2d');
+
+        // Map a MIDI note to its diatonic step relative to Middle C (C4 = step 0) and accidental
+        function midiToStaffStepAndAccidental(midi, rootKey) {
+            const keyInfo = KEY_SIGNATURES[rootKey] || KEY_SIGNATURES['C'];
+            const useFlats = keyInfo.useFlats;
+            const octave = Math.floor(midi / 12) - 1; // C4 = 60 -> octave 4
+            const pc = midiToPc(midi);
+
+            // Sharp vs Flat spelling maps: [diatonicLetterIndex (0..6), accidental ('', '#', 'b')]
+            const sharpMap = [
+                [0, ''],  [0, '♯'], [1, ''],  [1, '♯'], [2, ''],  [3, ''],
+                [3, '♯'], [4, ''],  [4, '♯'], [5, ''],  [5, '♯'], [6, '']
+            ];
+            const flatMap = [
+                [0, ''],  [1, '♭'], [1, ''],  [2, '♭'], [2, ''],  [3, ''],
+                [4, '♭'], [4, ''],  [5, '♭'], [5, ''],  [6, '♭'], [6, '']
+            ];
+
+            const [letterIdx, rawAcc] = useFlats ? flatMap[pc] : sharpMap[pc];
+            const diatonicStepFromC4 = (octave - 4) * 7 + letterIdx;
+
+            // Determine whether the accidental is already implied by the key signature
+            const sharpOrderLetters = [3, 0, 4, 1, 5, 2, 6]; // F, C, G, D, A, E, B
+            const flatOrderLetters  = [6, 2, 5, 1, 4, 0, 3]; // B, E, A, D, G, C, F
+
+            let impliedAcc = '';
+            if (keyInfo.sharps > 0 && sharpOrderLetters.slice(0, keyInfo.sharps).includes(letterIdx)) {
+                impliedAcc = '♯';
+            } else if (keyInfo.flats > 0 && flatOrderLetters.slice(0, keyInfo.flats).includes(letterIdx)) {
+                impliedAcc = '♭';
+            }
+
+            let displayAccidental = '';
+            if (rawAcc !== impliedAcc) {
+                displayAccidental = rawAcc === '' ? '♮' : rawAcc;
+            }
+
+            return {
+                step: diatonicStepFromC4,
+                accidental: displayAccidental,
+                pc
+            };
+        }
+
+        // Convert diatonic step from C4 to vertical Y coordinate on Treble or Bass staff
+        // Staff line spacing = `lineGap` (distance between two adjacent lines); each diatonic step = lineGap / 2
+        function stepToStaffY(stepFromC4, isTreble, staffTopY, lineGap) {
+            const halfGap = lineGap / 2;
+            if (isTreble) {
+                // Top line of Treble Staff is F5 = step +10 from C4
+                const stepsBelowF5 = 10 - stepFromC4;
+                return staffTopY + stepsBelowF5 * halfGap;
+            } else {
+                // Top line of Bass Staff is A3 = step -2 from C4
+                const stepsBelowA3 = -2 - stepFromC4;
+                return staffTopY + stepsBelowA3 * halfGap;
+            }
+        }
+
+        // Store hit-boxes of rendered beats so clicking on the score jumps/auditions that beat
+        let renderedBeatHitboxes = [];
+
+        function renderScore() {
+            const container = document.getElementById('scoreViewportContainer');
+            const dpr = window.devicePixelRatio || 1;
+            const width = container.clientWidth;
+
+            const isDark = AppState.sheetTheme === 'dark';
+            container.style.backgroundColor = isDark ? '#181614' : '#f6f1e7';
+
+            // Palette for notation
+            const palette = isDark ? {
+                bg: '#181614',
+                staffLine: '#574f46',
+                ink: '#ece4d8',
+                mutedInk: '#9c9082',
+                chordText: '#f5b051',
+                romanText: '#b5a898',
+                guideTone: '#f59e0b',
+                rhHighlight: '#38bdf8',
+                lhHighlight: '#34d399',
+                cursorFill: 'rgba(245, 158, 11, 0.14)',
+                cursorStroke: 'rgba(245, 158, 11, 0.75)'
+            } : {
+                bg: '#f6f1e7',
+                staffLine: '#9e9181',
+                ink: '#231f1c',
+                mutedInk: '#6b5e50',
+                chordText: '#9a5212',
+                romanText: '#695c4e',
+                guideTone: '#d97706',
+                rhHighlight: '#0284c7',
+                lhHighlight: '#059669',
+                cursorFill: 'rgba(217, 119, 6, 0.13)',
+                cursorStroke: 'rgba(217, 119, 6, 0.8)'
+            };
+
+            renderedBeatHitboxes = [];
+
+            if (AppState.viewLayout === 'ribbon') {
+                // Single-system horizontal infinite ribbon
+                const height = container.clientHeight;
+                scoreCanvas.width = width * dpr;
+                scoreCanvas.height = height * dpr;
+                scoreCanvas.style.height = `${height}px`;
+
+                scoreCtx.save();
+                scoreCtx.scale(dpr, dpr);
+                scoreCtx.clearRect(0, 0, width, height);
+
+                renderHorizontalRibbon(scoreCtx, width, height, palette);
+                scoreCtx.restore();
+            } else {
+                // Multi-system page view
+                const measuresPerRow = width < 700 ? 2 : (width < 1100 ? 3 : 4);
+                const totalRows = Math.ceil(AppState.measures.length / measuresPerRow);
+                const rowHeight = 250;
+                const totalHeight = Math.max(container.clientHeight, totalRows * rowHeight + 80);
+
+                scoreCanvas.width = width * dpr;
+                scoreCanvas.height = totalHeight * dpr;
+                scoreCanvas.style.height = `${totalHeight}px`;
+
+                scoreCtx.save();
+                scoreCtx.scale(dpr, dpr);
+                scoreCtx.clearRect(0, 0, width, totalHeight);
+
+                renderPageSystems(scoreCtx, width, totalHeight, measuresPerRow, rowHeight, palette);
+                scoreCtx.restore();
+            }
+        }
+
+        // Draw authentic Grand Staff Brace, Treble Clef, Bass Clef, Key Signature, and Time Signature
+        function drawSystemHeader(ctx, x, trebleTopY, bassTopY, lineGap, rootKey, timeSig, palette) {
+            const staffHeight = lineGap * 4;
+            const totalGrandHeight = (bassTopY + staffHeight) - trebleTopY;
+
+            ctx.save();
+            ctx.strokeStyle = palette.ink;
+            ctx.fillStyle = palette.ink;
+
+            // Left vertical system barline connecting Treble and Bass
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x, trebleTopY);
+            ctx.lineTo(x, bassTopY + staffHeight);
+            ctx.stroke();
+
+            // Curly Grand Staff Brace
+            const braceX = x - 8;
+            const midY = trebleTopY + totalGrandHeight / 2;
+            ctx.lineWidth = 2.2;
+            ctx.beginPath();
+            ctx.moveTo(braceX + 4, trebleTopY);
+            ctx.bezierCurveTo(braceX - 8, trebleTopY + totalGrandHeight * 0.15, braceX + 2, midY - 12, braceX - 7, midY);
+            ctx.bezierCurveTo(braceX + 2, midY + 12, braceX - 8, bassTopY + staffHeight - totalGrandHeight * 0.15, braceX + 4, bassTopY + staffHeight);
+            ctx.stroke();
+
+            // Treble Clef (𝄞) & Bass Clef (𝄢) using crisp serif glyphs
+            ctx.font = `${Math.round(lineGap * 4.8)}px "Cormorant Garamond", serif`;
+            ctx.fillText('𝄞', x + 8, trebleTopY + lineGap * 3.55);
+
+            ctx.font = `${Math.round(lineGap * 3.8)}px "Cormorant Garamond", serif`;
+            ctx.fillText('𝄢', x + 9, bassTopY + lineGap * 2.95);
+
+            // Key Signature accidentals
+            let cursorX = x + 44;
+            const keyInfo = KEY_SIGNATURES[rootKey] || KEY_SIGNATURES['C'];
+            ctx.font = `600 ${Math.round(lineGap * 1.9)}px "Cormorant Garamond", serif`;
+
+            // Sharp positions (step from C4) on Treble: F5(10), C5(7), G5(11), D5(8)
+            const trebleSharpSteps = [10, 7, 11, 8];
+            const bassSharpSteps   = [-4, -7, -3, -6];
+            // Flat positions on Treble: B4(6), E5(9), A4(5), D5(8)
+            const trebleFlatSteps  = [6, 9, 5, 8];
+            const bassFlatSteps    = [-8, -5, -9, -6];
+
+            if (keyInfo.sharps > 0) {
+                for (let i = 0; i < keyInfo.sharps; i++) {
+                    const ty = stepToStaffY(trebleSharpSteps[i], true, trebleTopY, lineGap);
+                    const by = stepToStaffY(bassSharpSteps[i], false, bassTopY, lineGap);
+                    ctx.fillText('♯', cursorX, ty + lineGap * 0.55);
+                    ctx.fillText('♯', cursorX, by + lineGap * 0.55);
+                    cursorX += 11;
+                }
+            } else if (keyInfo.flats > 0) {
+                for (let i = 0; i < keyInfo.flats; i++) {
+                    const ty = stepToStaffY(trebleFlatSteps[i], true, trebleTopY, lineGap);
+                    const by = stepToStaffY(bassFlatSteps[i], false, bassTopY, lineGap);
+                    ctx.fillText('♭', cursorX, ty + lineGap * 0.55);
+                    ctx.fillText('♭', cursorX, by + lineGap * 0.55);
+                    cursorX += 11;
+                }
+            }
+
+            // Time Signature numerals
+            cursorX += 8;
+            const [num, den] = timeSig.split('/');
+            ctx.font = `700 ${Math.round(lineGap * 2.35)}px "Cormorant Garamond", serif`;
+            ctx.textAlign = 'center';
+            ctx.fillText(num, cursorX + 8, trebleTopY + lineGap * 1.85);
+            ctx.fillText(den, cursorX + 8, trebleTopY + lineGap * 3.85);
+            ctx.fillText(num, cursorX + 8, bassTopY + lineGap * 1.85);
+            ctx.fillText(den, cursorX + 8, bassTopY + lineGap * 3.85);
+
+            ctx.restore();
+            return cursorX + 26;
+        }
+
+        // Draw the 5 horizontal staff lines for Treble and Bass
+        function drawGrandStaffLines(ctx, startX, endX, trebleTopY, bassTopY, lineGap, palette) {
+            ctx.save();
+            ctx.strokeStyle = palette.staffLine;
+            ctx.lineWidth = 1.1;
+
+            for (let i = 0; i < 5; i++) {
+                const ty = trebleTopY + i * lineGap;
+                const by = bassTopY + i * lineGap;
+
+                ctx.beginPath();
+                ctx.moveTo(startX, ty);
+                ctx.lineTo(endX, ty);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(startX, by);
+                ctx.lineTo(endX, by);
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        // Render Horizontal Infinite Ribbon mode
+        function renderHorizontalRibbon(ctx, width, height, palette) {
+            const lineGap = Math.max(10, Math.min(13, Math.floor(height / 24)));
+            const centerY = height * 0.5;
+            const trebleTopY = Math.round(centerY - lineGap * 6.8);
+            const bassTopY = Math.round(centerY + lineGap * 2.8);
+
+            const leftMargin = 28;
+            const currentMeas = AppState.measures[AppState.currentMeasureIndex] || AppState.measures[0];
+            if (!currentMeas) return;
+
+            // Draw full-width staff lines
+            drawGrandStaffLines(ctx, leftMargin, width - 16, trebleTopY, bassTopY, lineGap, palette);
+
+            // Draw fixed system header on the left
+            const headerEndX = drawSystemHeader(
+                ctx,
+                leftMargin,
+                trebleTopY,
+                bassTopY,
+                lineGap,
+                currentMeas.rootKey,
+                currentMeas.timeSig,
+                palette
+            );
+
+            // Playhead fixed anchor X in Continuous mode, or sliding in Measure mode
+            const playheadAnchorX = headerEndX + 85;
+            const measureWidth = Math.max(240, Math.min(340, width * 0.32));
+
+            // Clip measure scrolling region to the right of the header
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(headerEndX, 0, width - headerEndX - 10, height);
+            ctx.clip();
+
+            // Calculate smooth horizontal scroll offset
+            const scrollFraction = AppState.scrollMode === 'measure'
+                ? 0
+                : (AppState.currentBeatFloat / currentMeas.beatsPerMeasure);
+            const globalScrollX = (AppState.currentMeasureIndex + scrollFraction) * measureWidth;
+
+            // Render visible window of measures
+            const startMeasIdx = Math.max(0, AppState.currentMeasureIndex - 1);
+            const endMeasIdx = Math.min(AppState.measures.length - 1, AppState.currentMeasureIndex + 5);
+
+            for (let mIdx = startMeasIdx; mIdx <= endMeasIdx; mIdx++) {
+                const measure = AppState.measures[mIdx];
+                const measX = playheadAnchorX + (mIdx * measureWidth) - globalScrollX;
+
+                // Draw playhead highlight inside active measure
+                if (mIdx === AppState.currentMeasureIndex) {
+                    const beatOffset = (AppState.currentBeatFloat / measure.beatsPerMeasure) * measureWidth;
+                    const cursorX = AppState.scrollMode === 'measure' ? (measX + beatOffset) : playheadAnchorX;
+
+                    ctx.save();
+                    ctx.fillStyle = palette.cursorFill;
+                    ctx.strokeStyle = palette.cursorStroke;
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.roundRect(cursorX - 14, trebleTopY - 36, 28, (bassTopY + lineGap * 4) - trebleTopY + 72, 6);
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.moveTo(cursorX, trebleTopY - 36);
+                    ctx.lineTo(cursorX, bassTopY + lineGap * 4 + 36);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+
+                drawSingleMeasure(ctx, measure, measX, measureWidth, trebleTopY, bassTopY, lineGap, palette);
+            }
+
+            ctx.restore();
+        }
+
+        // Render Multi-Line Page View mode
+        function renderPageSystems(ctx, width, totalHeight, measuresPerRow, rowHeight, palette) {
+            const lineGap = 10.5;
+            const leftMargin = 32;
+            const rightMargin = 28;
+            const totalRows = Math.ceil(AppState.measures.length / measuresPerRow);
+
+            for (let row = 0; row < totalRows; row++) {
+                const rowTop = 36 + row * rowHeight;
+                const trebleTopY = rowTop + 34;
+                const bassTopY = trebleTopY + lineGap * 8.5;
+
+                const firstMeas = AppState.measures[row * measuresPerRow];
+                if (!firstMeas) break;
+
+                drawGrandStaffLines(ctx, leftMargin, width - rightMargin, trebleTopY, bassTopY, lineGap, palette);
+                const headerEndX = drawSystemHeader(
+                    ctx,
+                    leftMargin,
+                    trebleTopY,
+                    bassTopY,
+                    lineGap,
+                    firstMeas.rootKey,
+                    firstMeas.timeSig,
+                    palette
+                );
+
+                const availableWidth = (width - rightMargin) - headerEndX;
+                const measureWidth = availableWidth / measuresPerRow;
+
+                for (let col = 0; col < measuresPerRow; col++) {
+                    const mIdx = row * measuresPerRow + col;
+                    const measure = AppState.measures[mIdx];
+                    if (!measure) break;
+
+                    const measX = headerEndX + col * measureWidth;
+
+                    // Draw active playhead cursor on the current measure
+                    if (mIdx === AppState.currentMeasureIndex) {
+                        const paddingX = 24;
+                        const innerW = measureWidth - paddingX * 2;
+                        const cursorX = measX + paddingX + (AppState.currentBeatFloat / measure.beatsPerMeasure) * innerW;
+
+                        ctx.save();
+                        ctx.fillStyle = palette.cursorFill;
+                        ctx.strokeStyle = palette.cursorStroke;
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.roundRect(cursorX - 12, trebleTopY - 26, 24, (bassTopY + lineGap * 4) - trebleTopY + 52, 5);
+                        ctx.fill();
+                        ctx.beginPath();
+                        ctx.moveTo(cursorX, trebleTopY - 26);
+                        ctx.lineTo(cursorX, bassTopY + lineGap * 4 + 26);
+                        ctx.stroke();
+                        ctx.restore();
+                    }
+
+                    drawSingleMeasure(ctx, measure, measX, measureWidth, trebleTopY, bassTopY, lineGap, palette);
+                }
+            }
+        }
+
+        // Draw all musical contents of a single measure (Chord symbol, Roman numeral, notes, beams, barline)
+        function drawSingleMeasure(ctx, measure, measX, measWidth, trebleTopY, bassTopY, lineGap, palette) {
+            const staffHeight = lineGap * 4;
+            const padLeft = 26;
+            const padRight = 18;
+            const usableWidth = Math.max(80, measWidth - padLeft - padRight);
+
+            // Register beat hitboxes for mouse interaction
+            for (let b = 0; b < measure.beatsPerMeasure; b += 0.5) {
+                const bx = measX + padLeft + (b / measure.beatsPerMeasure) * usableWidth;
+                renderedBeatHitboxes.push({
+                    measureIndex: measure.index,
+                    beat: b,
+                    x1: bx - 16,
+                    x2: bx + 16,
+                    y1: trebleTopY - 40,
+                    y2: bassTopY + staffHeight + 40
+                });
+            }
+
+            // 1. Measure number & Chord Symbol above Treble Staff
+            ctx.save();
+            ctx.font = `500 10px "JetBrains Mono", monospace`;
+            ctx.fillStyle = palette.mutedInk;
+            ctx.fillText(`${measure.index + 1}`, measX + 6, trebleTopY - 10);
+
+            if (AppState.showChords) {
+                ctx.font = `600 16px "Cormorant Garamond", serif`;
+                ctx.fillStyle = palette.chordText;
+                ctx.fillText(measure.chord.symbol, measX + padLeft - 4, trebleTopY - 22);
+            }
+
+            // 2. Roman Numeral analysis below Bass Staff
+            if (AppState.showRoman) {
+                ctx.font = `italic 600 14px "Cormorant Garamond", serif`;
+                ctx.fillStyle = palette.romanText;
+                ctx.fillText(measure.chord.roman, measX + padLeft - 4, bassTopY + staffHeight + 28);
+            }
+            ctx.restore();
+
+            // 3. Draw Right Hand (Treble) Events
+            drawStaffEvents(ctx, measure.rhEvents, measure, true, measX + padLeft, usableWidth, trebleTopY, lineGap, palette);
+
+            // 4. Draw Left Hand (Bass) Events
+            drawStaffEvents(ctx, measure.lhEvents, measure, false, measX + padLeft, usableWidth, bassTopY, lineGap, palette);
+
+            // 5. Measure ending barline
+            ctx.save();
+            ctx.strokeStyle = palette.staffLine;
+            ctx.lineWidth = 1.3;
+            ctx.beginPath();
+            ctx.moveTo(measX + measWidth, trebleTopY);
+            ctx.lineTo(measX + measWidth, bassTopY + staffHeight);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // Draw events (notes, rests, stems, beams, ledger lines, guide tones, note names) for one staff
+        function drawStaffEvents(ctx, events, measure, isTreble, startX, usableWidth, staffTopY, lineGap, palette) {
+            const keyInfo = KEY_SIGNATURES[measure.rootKey] || KEY_SIGNATURES['C'];
+
+            // Track eighth-note pairs on the same beat so we can beam them together cleanly
+            let pendingBeamEvent = null;
+
+            for (let i = 0; i < events.length; i++) {
+                const ev = events[i];
+                const x = startX + (ev.startBeat / measure.beatsPerMeasure) * usableWidth;
+
+                const isCurrentlyPlaying = (
+                    measure.index === AppState.currentMeasureIndex &&
+                    AppState.currentBeatFloat >= ev.startBeat - 0.05 &&
+                    AppState.currentBeatFloat < ev.startBeat + ev.durationBeats - 0.05
+                );
+
+                if (ev.isRest || ev.notes.length === 0) {
+                    drawRestGlyph(ctx, x, staffTopY, lineGap, ev.durationBeats, palette);
+                    pendingBeamEvent = null;
+                    continue;
+                }
+
+                // Compute staff positions for all notes in this event
+                const noteInfos = ev.notes.map(midi => {
+                    const info = midiToStaffStepAndAccidental(midi, measure.rootKey);
+                    const y = stepToStaffY(info.step, isTreble, staffTopY, lineGap);
+                    const isGuide = measure.chord.guideTonePcs.has(info.pc);
+                    return { midi, ...info, y, isGuide };
+                }).sort((a, b) => b.y - a.y); // Bottom-most note first (largest Y)
+
+                const bottomNote = noteInfos[0];
+                const topNote = noteInfos[noteInfos.length - 1];
+
+                // Draw ledger lines for notes above or below the 5-line staff
+                drawLedgerLines(ctx, x, noteInfos, isTreble, staffTopY, lineGap, palette);
+
+                // Determine stem direction: notes above middle line have stem down, otherwise stem up
+                const middleLineY = staffTopY + lineGap * 2;
+                const avgY = (bottomNote.y + topNote.y) / 2;
+                const stemUp = isTreble ? (avgY >= middleLineY) : (avgY > middleLineY);
+
+                // Draw noteheads, accidentals, and optional note labels
+                const rx = lineGap * 0.62;
+                const ry = lineGap * 0.44;
+                const isHollow = ev.durationBeats >= 2; // Half, dotted half, whole notes
+
+                for (let nIdx = 0; nIdx < noteInfos.length; nIdx++) {
+                    const n = noteInfos[nIdx];
+
+                    // Choose color: active highlight, guide tone highlight, or standard ink
+                    let fillColor = palette.ink;
+                    if (AppState.highlightGuideTones && n.isGuide) {
+                        fillColor = palette.guideTone;
+                    } else if (isCurrentlyPlaying) {
+                        fillColor = isTreble ? palette.rhHighlight : palette.lhHighlight;
+                    }
+
+                    // Offset adjacent seconds slightly to avoid overlapping noteheads
+                    let noteX = x;
+                    if (nIdx > 0 && Math.abs(noteInfos[nIdx - 1].step - n.step) === 1) {
+                        noteX += rx * 1.85;
+                    }
+
+                    ctx.save();
+                    ctx.fillStyle = fillColor;
+                    ctx.strokeStyle = fillColor;
+                    ctx.lineWidth = isHollow ? 1.8 : 1.2;
+
+                    ctx.beginPath();
+                    ctx.ellipse(noteX, n.y, rx, ry, -0.28, 0, Math.PI * 2);
+                    if (isHollow) {
+                        ctx.stroke();
+                    } else {
+                        ctx.fill();
+                    }
+
+                    // Augmentation dot for dotted half (duration === 3) or dotted quarter (1.5)
+                    if (ev.durationBeats === 3 || ev.durationBeats === 1.5) {
+                        ctx.beginPath();
+                        ctx.arc(noteX + rx + 5, n.y - 2, 2.2, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+
+                    // Accidental symbol to the left of notehead
+                    if (n.accidental) {
+                        ctx.font = `600 ${Math.round(lineGap * 1.75)}px "Cormorant Garamond", serif`;
+                        ctx.fillText(n.accidental, noteX - rx - 11 - (nIdx % 2) * 7, n.y + lineGap * 0.48);
+                    }
+
+                    // Optional Solfege / Note Name label
+                    if (AppState.noteNameMode !== 'none' && (isTreble || nIdx === 0)) {
+                        const label = formatPitchClass(n.pc, keyInfo.useFlats, AppState.noteNameMode);
+                        ctx.font = `500 9px "JetBrains Mono", monospace`;
+                        ctx.fillStyle = n.isGuide && AppState.highlightGuideTones ? palette.guideTone : palette.mutedInk;
+                        const labelY = isTreble ? (topNote.y - lineGap * 1.15 - nIdx * 10) : (bottomNote.y + lineGap * 1.65);
+                        ctx.fillText(label, noteX - 6, labelY);
+                    }
+
+                    ctx.restore();
+                }
+
+                // Draw Stems (for notes shorter than 4 beats)
+                if (ev.durationBeats < 4) {
+                    const stemX = stemUp ? (x + rx - 0.8) : (x - rx + 0.8);
+                    const stemStartY = stemUp ? bottomNote.y : topNote.y;
+                    const stemEndY = stemUp ? (topNote.y - lineGap * 3.1) : (bottomNote.y + lineGap * 3.1);
+
+                    ctx.save();
+                    ctx.strokeStyle = isCurrentlyPlaying
+                        ? (isTreble ? palette.rhHighlight : palette.lhHighlight)
+                        : palette.ink;
+                    ctx.lineWidth = 1.4;
+                    ctx.beginPath();
+                    ctx.moveTo(stemX, stemStartY);
+                    ctx.lineTo(stemX, stemEndY);
+                    ctx.stroke();
+
+                    // Handle eighth notes (0.5 beat): beam pairs together or draw single flag
+                    if (ev.durationBeats === 0.5) {
+                        if (pendingBeamEvent && Math.floor(pendingBeamEvent.startBeat) === Math.floor(ev.startBeat) && pendingBeamEvent.stemUp === stemUp) {
+                            // Draw connecting beam between previous eighth note and current eighth note
+                            ctx.lineWidth = 3.8;
+                            ctx.beginPath();
+                            ctx.moveTo(pendingBeamEvent.stemX, pendingBeamEvent.stemEndY);
+                            ctx.lineTo(stemX, stemEndY);
+                            ctx.stroke();
+                            pendingBeamEvent = null;
+                        } else {
+                            // Check if next event is a matching eighth note in the same beat
+                            const nextEv = events[i + 1];
+                            if (nextEv && !nextEv.isRest && nextEv.durationBeats === 0.5 && Math.floor(nextEv.startBeat) === Math.floor(ev.startBeat)) {
+                                pendingBeamEvent = { startBeat: ev.startBeat, stemX, stemEndY, stemUp };
+                            } else {
+                                // Draw standalone eighth-note flag
+                                ctx.lineWidth = 1.6;
+                                ctx.beginPath();
+                                ctx.moveTo(stemX, stemEndY);
+                                if (stemUp) {
+                                    ctx.quadraticCurveTo(stemX + 9, stemEndY + 7, stemX + 6, stemEndY + 16);
+                                } else {
+                                    ctx.quadraticCurveTo(stemX + 9, stemEndY - 7, stemX + 6, stemEndY - 16);
+                                }
+                                ctx.stroke();
+                                pendingBeamEvent = null;
+                            }
+                        }
+                    } else {
+                        pendingBeamEvent = null;
+                    }
+                    ctx.restore();
+                }
+
+                // Draw tie curve if marked
+                if (ev.tieToNext) {
+                    ctx.save();
+                    ctx.strokeStyle = palette.ink;
+                    ctx.lineWidth = 1.4;
+                    ctx.beginPath();
+                    const tieStartX = x + rx + 3;
+                    const tieEndX = x + (ev.durationBeats / measure.beatsPerMeasure) * usableWidth - 6;
+                    const tieY = topNote.y - 6;
+                    ctx.moveTo(tieStartX, tieY);
+                    ctx.quadraticCurveTo((tieStartX + tieEndX) / 2, tieY - 12, tieEndX, tieY);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            }
+        }
+
+        // Draw ledger lines above or below the staff
+        function drawLedgerLines(ctx, x, noteInfos, isTreble, staffTopY, lineGap, palette) {
+            const staffBottomY = staffTopY + lineGap * 4;
+            const halfGap = lineGap / 2;
+            const ledgerHalfWidth = lineGap * 0.95;
+
+            ctx.save();
+            ctx.strokeStyle = palette.staffLine;
+            ctx.lineWidth = 1.25;
+
+            for (const n of noteInfos) {
+                // Above top line
+                if (n.y <= staffTopY - lineGap + 1) {
+                    for (let ly = staffTopY - lineGap; ly >= n.y - 1; ly -= lineGap) {
+                        ctx.beginPath();
+                        ctx.moveTo(x - ledgerHalfWidth, ly);
+                        ctx.lineTo(x + ledgerHalfWidth, ly);
+                        ctx.stroke();
+                    }
+                }
+                // Below bottom line (including Middle C = C4)
+                if (n.y >= staffBottomY + lineGap - 1) {
+                    for (let ly = staffBottomY + lineGap; ly <= n.y + 1; ly += lineGap) {
+                        ctx.beginPath();
+                        ctx.moveTo(x - ledgerHalfWidth, ly);
+                        ctx.lineTo(x + ledgerHalfWidth, ly);
+                        ctx.stroke();
+                    }
+                } else if (n.step === 0) {
+                    // Explicit Middle C ledger line
+                    ctx.beginPath();
+                    ctx.moveTo(x - ledgerHalfWidth, n.y);
+                    ctx.lineTo(x + ledgerHalfWidth, n.y);
+                    ctx.stroke();
+                }
+            }
+            ctx.restore();
+        }
+
+        // Draw quarter rest or half rest glyph
+        function drawRestGlyph(ctx, x, staffTopY, lineGap, durationBeats, palette) {
+            ctx.save();
+            ctx.fillStyle = palette.mutedInk;
+            ctx.strokeStyle = palette.mutedInk;
+
+            if (durationBeats >= 2) {
+                // Half rest block sitting on middle line
+                ctx.fillRect(x - 6, staffTopY + lineGap * 1.5, 12, lineGap * 0.5);
+            } else {
+                // Classical calligraphic quarter rest path
+                const topY = staffTopY + lineGap * 0.9;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(x - 3, topY);
+                ctx.lineTo(x + 4, topY + lineGap * 0.8);
+                ctx.lineTo(x - 3, topY + lineGap * 1.6);
+                ctx.lineTo(x + 3, topY + lineGap * 2.3);
+                ctx.quadraticCurveTo(x - 5, topY + lineGap * 2.5, x - 2, topY + lineGap * 3.1);
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        /***********************************************************************
+         * 6. BOTTOM 88-KEY INTERACTIVE PIANO VISUALIZER
+         ***********************************************************************/
+        const pianoCanvas = document.getElementById('pianoCanvas');
+        const pianoCtx = pianoCanvas.getContext('2d');
+        let pianoKeyRects = []; // Store geometry for mouse/touch playing
+
+        function isBlackKey(midi) {
+            const pc = midiToPc(midi);
+            return [1, 3, 6, 8, 10].includes(pc);
+        }
+
+        function renderPianoKeyboard() {
+            const dpr = window.devicePixelRatio || 1;
+            const width = pianoCanvas.clientWidth;
+            const height = pianoCanvas.clientHeight;
+
+            pianoCanvas.width = width * dpr;
+            pianoCanvas.height = height * dpr;
+
+            pianoCtx.save();
+            pianoCtx.scale(dpr, dpr);
+            pianoCtx.clearRect(0, 0, width, height);
+
+            // 88 keys: A0 (MIDI 21) to C8 (MIDI 108) -> 52 white keys
+            const startMidi = 21;
+            const endMidi = 108;
+            const whiteKeyWidth = width / 52;
+            const blackKeyWidth = whiteKeyWidth * 0.62;
+            const blackKeyHeight = height * 0.62;
+
+            pianoKeyRects = [];
+
+            const now = performance.now();
+            // Prune expired score highlights
+            for (const [m, data] of AppState.activeScoreNotes.entries()) {
+                if (now > data.expiresAt) {
+                    AppState.activeScoreNotes.delete(m);
+                }
+            }
+
+            // 1. Draw all 52 White Keys
+            let whiteIdx = 0;
+            const midiToWhiteX = {};
+            for (let m = startMidi; m <= endMidi; m++) {
+                if (!isBlackKey(m)) {
+                    const x = whiteIdx * whiteKeyWidth;
+                    midiToWhiteX[m] = x;
+
+                    const scoreHighlight = AppState.activeScoreNotes.get(m);
+                    const isMidiPressed = AppState.activeMidiNotes.has(m);
+
+                    let fill = '#ece6dc';
+                    if (isMidiPressed) {
+                        fill = '#a855f7'; // Violet for live MIDI / mouse input
+                    } else if (scoreHighlight) {
+                        if (scoreHighlight.isGuideTone && AppState.highlightGuideTones) {
+                            fill = '#f59e0b'; // Warm Amber for Guide Tone (3rd/7th)
+                        } else {
+                            fill = scoreHighlight.hand === 'rh' ? '#38bdf8' : '#34d399';
+                        }
+                    }
+
+                    pianoCtx.fillStyle = fill;
+                    pianoCtx.strokeStyle = '#1b1815';
+                    pianoCtx.lineWidth = 1;
+
+                    pianoCtx.beginPath();
+                    pianoCtx.roundRect(x + 0.5, 0, whiteKeyWidth - 1, height - 2, [0, 0, 4, 4]);
+                    pianoCtx.fill();
+                    pianoCtx.stroke();
+
+                    // Mark Middle C (C4 = 60) and other C octaves
+                    if (m % 12 === 0) {
+                        const oct = Math.floor(m / 12) - 1;
+                        pianoCtx.fillStyle = m === 60 ? '#b45309' : '#78716c';
+                        pianoCtx.font = `600 9px "JetBrains Mono", monospace`;
+                        pianoCtx.textAlign = 'center';
+                        pianoCtx.fillText(`C${oct}`, x + whiteKeyWidth / 2, height - 7);
+                    }
+
+                    pianoKeyRects.push({
+                        midi: m,
+                        isBlack: false,
+                        x,
+                        y: 0,
+                        w: whiteKeyWidth,
+                        h: height
+                    });
+
+                    whiteIdx++;
+                }
+            }
+
+            // 2. Draw all 36 Black Keys on top
+            for (let m = startMidi; m <= endMidi; m++) {
+                if (isBlackKey(m)) {
+                    const prevWhiteX = midiToWhiteX[m - 1] || 0;
+                    const x = prevWhiteX + whiteKeyWidth - (blackKeyWidth / 2);
+
+                    const scoreHighlight = AppState.activeScoreNotes.get(m);
+                    const isMidiPressed = AppState.activeMidiNotes.has(m);
+
+                    let fill = '#1f1c19';
+                    if (isMidiPressed) {
+                        fill = '#c084fc';
+                    } else if (scoreHighlight) {
+                        if (scoreHighlight.isGuideTone && AppState.highlightGuideTones) {
+                            fill = '#f59e0b';
+                        } else {
+                            fill = scoreHighlight.hand === 'rh' ? '#0284c7' : '#059669';
+                        }
+                    }
+
+                    pianoCtx.fillStyle = fill;
+                    pianoCtx.strokeStyle = '#0f0e0c';
+                    pianoCtx.lineWidth = 1;
+
+                    pianoCtx.beginPath();
+                    pianoCtx.roundRect(x, 0, blackKeyWidth, blackKeyHeight, [0, 0, 3, 3]);
+                    pianoCtx.fill();
+                    pianoCtx.stroke();
+
+                    pianoKeyRects.push({
+                        midi: m,
+                        isBlack: true,
+                        x,
+                        y: 0,
+                        w: blackKeyWidth,
+                        h: blackKeyHeight
+                    });
+                }
+            }
+
+            pianoCtx.restore();
+        }
+
+        // Hit-test piano canvas for mouse / touch interaction (black keys take priority)
+        function getPianoMidiAtPoint(clientX, clientY) {
+            const rect = pianoCanvas.getBoundingClientRect();
+            const x = clientX - rect.left;
+            const y = clientY - rect.top;
+
+            // Check black keys first
+            for (const k of pianoKeyRects) {
+                if (k.isBlack && x >= k.x && x <= k.x + k.w && y >= k.y && y <= k.y + k.h) {
+                    return k.midi;
+                }
+            }
+            // Check white keys
+            for (const k of pianoKeyRects) {
+                if (!k.isBlack && x >= k.x && x <= k.x + k.w && y >= k.y && y <= k.y + k.h) {
+                    return k.midi;
+                }
+            }
+            return null;
+        }
+
+        /***********************************************************************
+         * 7. INFINITE PLAYBACK LOOP, AUDIO SCHEDULER & MIDI WAIT ENGINE
+         ***********************************************************************/
+
+        // Trigger all notes scheduled at a specific sub-beat (0.5 beat resolution)
+        function triggerMeasureBeatAudio(measure, subBeat, playSound = true) {
+            const beatDurationSec = 60 / AppState.tempo;
+            const nowMs = performance.now();
+
+            // Optional soft wooden metronome on integer beats
+            if (playSound && AppState.metronomeEnabled && Math.abs(subBeat - Math.round(subBeat)) < 0.01) {
+                audioEngine.playMetronomeClick(subBeat === 0);
+            }
+
+            // Trigger Left Hand events starting at this subBeat
+            for (const ev of measure.lhEvents) {
+                if (!ev.isRest && Math.abs(ev.startBeat - subBeat) < 0.05) {
+                    const durSec = ev.durationBeats * beatDurationSec;
+                    for (const midi of ev.notes) {
+                        if (playSound) audioEngine.playNote(midi, durSec, 0.58);
+                        const isGuide = measure.chord.guideTonePcs.has(midiToPc(midi));
+                        AppState.activeScoreNotes.set(midi, {
+                            hand: 'lh',
+                            isGuideTone: isGuide,
+                            expiresAt: nowMs + durSec * 920
+                        });
+                    }
+                }
+            }
+
+            // Trigger Right Hand events starting at this subBeat
+            for (const ev of measure.rhEvents) {
+                if (!ev.isRest && Math.abs(ev.startBeat - subBeat) < 0.05) {
+                    const durSec = ev.durationBeats * beatDurationSec;
+                    for (const midi of ev.notes) {
+                        if (playSound) audioEngine.playNote(midi, durSec, 0.72);
+                        const isGuide = measure.chord.guideTonePcs.has(midiToPc(midi));
+                        AppState.activeScoreNotes.set(midi, {
+                            hand: 'rh',
+                            isGuideTone: isGuide,
+                            expiresAt: nowMs + durSec * 920
+                        });
+                    }
+                }
+            }
+
+            updateActiveNotesReadout();
+            renderPianoKeyboard();
+        }
+
+        // Gather expected pitch classes at current sub-beat for "Attente MIDI" mode
+        function getExpectedSubBeatNotes(measure, subBeat) {
+            const expectedMidis = [];
+            for (const ev of measure.rhEvents) {
+                if (!ev.isRest && Math.abs(ev.startBeat - subBeat) < 0.05) {
+                    expectedMidis.push(...ev.notes);
+                }
+            }
+            for (const ev of measure.lhEvents) {
+                if (!ev.isRest && Math.abs(ev.startBeat - subBeat) < 0.05) {
+                    expectedMidis.push(...ev.notes);
+                }
+            }
+            return expectedMidis;
+        }
+
+        // Advance to the next rhythmic event in "Attente MIDI" mode or manual step button
+        function advanceOneSubBeatStep(playAudio = true) {
+            const measure = AppState.measures[AppState.currentMeasureIndex];
+            if (!measure) return;
+
+            const currentSub = Math.round(AppState.currentBeatFloat * 2) / 2;
+            if (playAudio) {
+                triggerMeasureBeatAudio(measure, currentSub, true);
+            }
+
+            let nextSub = currentSub + 0.5;
+            if (nextSub >= measure.beatsPerMeasure - 0.01) {
+                AppState.currentMeasureIndex++;
+                AppState.currentBeatFloat = 0;
+                ensureInfiniteBuffer();
+                autoScrollPageModeIfNeeded();
+            } else {
+                AppState.currentBeatFloat = nextSub;
+            }
+
+            AppState.satisfiedSubBeatNotes.clear();
+
+            // If the new sub-beat has no notes starting on it, skip empty eighth subdivisions automatically
+            const nextMeasure = AppState.measures[AppState.currentMeasureIndex];
+            const expected = getExpectedSubBeatNotes(nextMeasure, AppState.currentBeatFloat);
+            if (expected.length === 0 && AppState.scrollMode === 'midi_wait') {
+                // Advance one more eighth so the user always lands on an actual attack
+                let nextNext = AppState.currentBeatFloat + 0.5;
+                if (nextNext >= nextMeasure.beatsPerMeasure - 0.01) {
+                    AppState.currentMeasureIndex++;
+                    AppState.currentBeatFloat = 0;
+                    ensureInfiniteBuffer();
+                } else {
+                    AppState.currentBeatFloat = nextNext;
+                }
+            }
+
+            updateHudInfo();
+            renderScore();
+            renderPianoKeyboard();
+        }
+
+        // Main animation loop for smooth scrolling and audio scheduling
+        function animationLoop(timestamp) {
+            if (!AppState.lastFrameTime) AppState.lastFrameTime = timestamp;
+            const dtSec = Math.min(0.1, (timestamp - AppState.lastFrameTime) / 1000);
+            AppState.lastFrameTime = timestamp;
+
+            if (AppState.isPlaying && AppState.scrollMode !== 'midi_wait') {
+                const measure = AppState.measures[AppState.currentMeasureIndex];
+                if (measure) {
+                    const beatsPerSec = AppState.tempo / 60;
+                    const prevBeat = AppState.currentBeatFloat;
+                    AppState.currentBeatFloat += dtSec * beatsPerSec;
+
+                    // Check if we crossed a 0.5-beat boundary
+                    const currentSubIdx = Math.floor(AppState.currentBeatFloat * 2);
+                    const globalSubId = AppState.currentMeasureIndex * 16 + currentSubIdx;
+
+                    if (globalSubId !== AppState.lastTriggeredSubBeat) {
+                        AppState.lastTriggeredSubBeat = globalSubId;
+                        const subBeat = currentSubIdx * 0.5;
+                        if (subBeat < measure.beatsPerMeasure) {
+                            triggerMeasureBeatAudio(measure, subBeat, true);
+                        }
+                    }
+
+                    // Advance to next measure when measure completes
+                    if (AppState.currentBeatFloat >= measure.beatsPerMeasure) {
+                        AppState.currentBeatFloat -= measure.beatsPerMeasure;
+                        AppState.currentMeasureIndex++;
+                        ensureInfiniteBuffer();
+                        updateHudInfo();
+                        autoScrollPageModeIfNeeded();
+
+                        // Trigger beat 0 of the newly entered measure immediately
+                        const newMeas = AppState.measures[AppState.currentMeasureIndex];
+                        const newGlobalSubId = AppState.currentMeasureIndex * 16;
+                        AppState.lastTriggeredSubBeat = newGlobalSubId;
+                        triggerMeasureBeatAudio(newMeas, 0, true);
+                    }
+
+                    renderScore();
+                }
+            }
+
+            // Refresh keyboard if active note highlights are decaying
+            if (AppState.activeScoreNotes.size > 0) {
+                renderPianoKeyboard();
+            }
+
+            requestAnimationFrame(animationLoop);
+        }
+
+        // Keep active row visible in Multi-System Page mode
+        function autoScrollPageModeIfNeeded() {
+            if (AppState.viewLayout !== 'page') return;
+            const container = document.getElementById('scoreViewportContainer');
+            const width = container.clientWidth;
+            const measuresPerRow = width < 700 ? 2 : (width < 1100 ? 3 : 4);
+            const activeRow = Math.floor(AppState.currentMeasureIndex / measuresPerRow);
+            const targetScrollTop = Math.max(0, activeRow * 250 - 40);
+            container.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
+        }
+
+        /***********************************************************************
+         * 8. WEB MIDI API INTEGRATION & VIRTUAL KEYBOARD INPUT
+         ***********************************************************************/
+        function handleUserNoteOn(midi, velocity = 0.75) {
+            AppState.activeMidiNotes.add(midi);
+            audioEngine.playNote(midi, 1.4, velocity);
+
+            // Check if "Attente MIDI" mode is active
+            if (AppState.scrollMode === 'midi_wait') {
+                const measure = AppState.measures[AppState.currentMeasureIndex];
+                if (measure) {
+                    const subBeat = Math.round(AppState.currentBeatFloat * 2) / 2;
+                    const expectedMidis = getExpectedSubBeatNotes(measure, subBeat);
+
+                    // Match either exact MIDI pitch or same pitch class (for flexible octave keyboards)
+                    for (const exp of expectedMidis) {
+                        if (exp === midi || midiToPc(exp) === midiToPc(midi)) {
+                            AppState.satisfiedSubBeatNotes.add(exp);
+                        }
+                    }
+
+                    // Advance as soon as Right Hand melody note or all expected notes are played
+                    const rhExpected = [];
+                    for (const ev of measure.rhEvents) {
+                        if (!ev.isRest && Math.abs(ev.startBeat - subBeat) < 0.05) {
+                            rhExpected.push(...ev.notes);
+                        }
+                    }
+
+                    const requiredTarget = rhExpected.length > 0 ? rhExpected : expectedMidis;
+                    const allSatisfied = requiredTarget.length > 0 && requiredTarget.every(m => AppState.satisfiedSubBeatNotes.has(m));
+
+                    if (allSatisfied) {
+                        advanceOneSubBeatStep(false);
+                    }
+                }
+            }
+
+            updateActiveNotesReadout();
+            renderPianoKeyboard();
+        }
+
+        function handleUserNoteOff(midi) {
+            AppState.activeMidiNotes.delete(midi);
+            updateActiveNotesReadout();
+            renderPianoKeyboard();
+        }
+
+        // Initialize Web MIDI API if supported by browser
+        function initWebMIDI() {
+            const dot = document.getElementById('midiStatusDot');
+            const text = document.getElementById('midiStatusText');
+
+            if (!navigator.requestMIDIAccess) {
+                dot.className = 'w-2 h-2 rounded-full bg-amber-500';
+                text.textContent = 'MIDI: Clavier Virtuel';
+                return;
+            }
+
+            navigator.requestMIDIAccess().then(midiAccess => {
+                const bindInputs = () => {
+                    const inputs = Array.from(midiAccess.inputs.values());
+                    if (inputs.length > 0) {
+                        dot.className = 'w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]';
+                        text.textContent = `MIDI: ${inputs[0].name.slice(0, 12)}`;
+                    } else {
+                        dot.className = 'w-2 h-2 rounded-full bg-amber-400';
+                        text.textContent = 'MIDI: Prêt (0 périph.)';
+                    }
+
+                    for (const input of inputs) {
+                        input.onmidimessage = (msg) => {
+                            const [status, data1, data2] = msg.data;
+                            const cmd = status & 0xf0;
+                            if (cmd === 0x90 && data2 > 0) {
+                                handleUserNoteOn(data1, data2 / 127);
+                            } else if (cmd === 0x80 || (cmd === 0x90 && data2 === 0)) {
+                                handleUserNoteOff(data1);
+                            }
+                        };
+                    }
+                };
+
+                bindInputs();
+                midiAccess.onstatechange = bindInputs;
+            }).catch(() => {
+                dot.className = 'w-2 h-2 rounded-full bg-amber-500';
+                text.textContent = 'MIDI: Simul. Clavier';
+            });
+        }
+
+        /***********************************************************************
+         * 9. UI CONTROLS, PRESET MANAGEMENT & EVENT LISTENERS
+         ***********************************************************************/
+        function updateHeaderSummary() {
+            const keyInfo = KEY_SIGNATURES[AppState.rootKey] || KEY_SIGNATURES['C'];
+            const modeLabel = MODE_LABELS_FR[AppState.mode] || 'Majeur';
+            document.getElementById('harmonicSummaryText').textContent =
+                `${keyInfo.labelFr} ${modeLabel} • ${AppState.timeSig} • Lecture infinie`;
+
+            const presetObj = STYLE_PRESETS[AppState.activePreset];
+            document.getElementById('activePresetBadge').textContent = presetObj ? presetObj.name : 'Personnalisé';
+        }
+
+        function updateHudInfo() {
+            const measure = AppState.measures[AppState.currentMeasureIndex];
+            if (!measure) return;
+            document.getElementById('hudMeasureNum').textContent = `${measure.index + 1}`;
+            document.getElementById('hudCurrentChord').textContent = measure.chord.symbol;
+            document.getElementById('hudCurrentRoman').textContent = measure.chord.roman;
+
+            // Update MIDI Wait banner if active
+            const banner = document.getElementById('midiWaitBanner');
+            if (AppState.scrollMode === 'midi_wait') {
+                banner.classList.remove('hidden');
+                banner.classList.add('flex');
+                const subBeat = Math.round(AppState.currentBeatFloat * 2) / 2;
+                const expected = getExpectedSubBeatNotes(measure, subBeat);
+                const keyInfo = KEY_SIGNATURES[measure.rootKey] || KEY_SIGNATURES['C'];
+                const names = expected.map(m => formatPitchClass(midiToPc(m), keyInfo.useFlats, 'fr'));
+                document.getElementById('midiExpectedNotesLabel').textContent =
+                    names.length > 0 ? [...new Set(names)].join(', ') : 'Silence';
+
+                // Highlight expected notes on the 88-key visual keyboard so user can see or click them
+                AppState.activeScoreNotes.clear();
+                for (const m of expected) {
+                    AppState.activeScoreNotes.set(m, {
+                        hand: m >= 60 ? 'rh' : 'lh',
+                        isGuideTone: measure.chord.guideTonePcs.has(midiToPc(m)),
+                        expiresAt: performance.now() + 60000
+                    });
+                }
+            } else {
+                banner.classList.add('hidden');
+                banner.classList.remove('flex');
+            }
+        }
+
+        function updateActiveNotesReadout() {
+            const readout = document.getElementById('activeNotesReadout');
+            const keyInfo = KEY_SIGNATURES[AppState.rootKey] || KEY_SIGNATURES['C'];
+            const allMidis = [
+                ...Array.from(AppState.activeScoreNotes.keys()),
+                ...Array.from(AppState.activeMidiNotes)
+            ];
+            const uniqueMidis = [...new Set(allMidis)].sort((a, b) => a - b);
+            if (uniqueMidis.length === 0) {
+                readout.textContent = '';
+                return;
+            }
+            const names = uniqueMidis.map(m => {
+                const oct = Math.floor(m / 12) - 1;
+                return `${formatPitchClass(midiToPc(m), keyInfo.useFlats, 'fr')}${oct}`;
+            });
+            readout.textContent = `• ${names.join(' – ')}`;
+        }
+
+        // Apply one of the 4 signature contemplative presets
+        function applyStylePreset(presetKey) {
+            const p = STYLE_PRESETS[presetKey];
+            if (!p) return;
+
+            AppState.activePreset = presetKey;
+            AppState.tempo = p.tempo;
+            AppState.rootKey = p.rootKey;
+            AppState.mode = p.mode;
+            AppState.timeSig = p.timeSig;
+            AppState.harmonicRichness = p.harmonicRichness;
+            AppState.leftHandPattern = p.leftHandPattern;
+            AppState.rightHandDensity = Number(p.rightHandDensity);
+            AppState.intervalLeap = p.intervalLeap;
+
+            // Sync UI inputs
+            document.getElementById('sliderTempo').value = p.tempo;
+            document.getElementById('valTempo').textContent = `${p.tempo} BPM`;
+            document.getElementById('selectRootKey').value = p.rootKey;
+            document.getElementById('selectMode').value = p.mode;
+            document.getElementById('selectTimeSig').value = p.timeSig;
+            document.getElementById('selectHarmonicRichness').value = p.harmonicRichness;
+            document.getElementById('selectLeftHandPattern').value = p.leftHandPattern;
+            document.getElementById('selectRightHandDensity').value = p.rightHandDensity;
+            document.getElementById('selectIntervalLeap').value = p.intervalLeap;
+            document.getElementById('sliderReverb').value = p.reverb;
+            audioEngine.updateReverbMix(p.reverb / 100);
+
+            // Highlight active preset button card
+            document.querySelectorAll('.preset-btn').forEach(btn => {
+                const isSelected = btn.getAttribute('data-preset') === presetKey;
+                btn.className = isSelected
+                    ? 'preset-btn text-left p-2.5 rounded-xl border border-amber-500/60 bg-amber-500/10 hover:bg-amber-500/15 transition group'
+                    : 'preset-btn text-left p-2.5 rounded-xl border border-studio-700 bg-studio-850 hover:bg-studio-800 transition group';
+            });
+
+            rebuildScoreStream();
+        }
+
+        // LocalStorage custom scenario persistence
+        const STORAGE_KEY = 'atelier_contemplatif_scenarios_v1';
+
+        function loadSavedScenarios() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                return raw ? JSON.parse(raw) : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function renderSavedScenariosList() {
+            const listEl = document.getElementById('savedScenariosList');
+            const scenarios = loadSavedScenarios();
+            listEl.innerHTML = '';
+
+            if (scenarios.length === 0) {
+                listEl.innerHTML = `<p class="text-[11px] text-studio-400 italic">Aucun scénario personnalisé enregistré.</p>`;
+                return;
+            }
+
+            scenarios.forEach((sc, idx) => {
+                const row = document.createElement('div');
+                row.className = 'flex items-center justify-between p-2 rounded-lg bg-studio-850 border border-studio-800 text-xs';
+                row.innerHTML = `
+                    <button data-load-idx="${idx}" class="text-left flex-1 hover:text-amber-300 transition truncate pr-2">
+                        <span class="font-medium">${sc.name}</span>
+                        <span class="text-[10px] font-mono text-studio-400 ml-1">(${sc.rootKey} ${MODE_LABELS_FR[sc.mode] || ''} • ${sc.timeSig})</span>
+                    </button>
+                    <button data-del-idx="${idx}" class="text-studio-400 hover:text-red-400 px-1.5" title="Supprimer">✕</button>
+                `;
+                listEl.appendChild(row);
+            });
+
+            listEl.querySelectorAll('[data-load-idx]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const idx = Number(btn.getAttribute('data-load-idx'));
+                    const sc = loadSavedScenarios()[idx];
+                    if (!sc) return;
+                    AppState.tempo = sc.tempo;
+                    AppState.rootKey = sc.rootKey;
+                    AppState.mode = sc.mode;
+                    AppState.timeSig = sc.timeSig;
+                    AppState.harmonicRichness = sc.harmonicRichness;
+                    AppState.leftHandPattern = sc.leftHandPattern;
+                    AppState.rightHandDensity = Number(sc.rightHandDensity);
+                    AppState.intervalLeap = sc.intervalLeap;
+
+                    document.getElementById('sliderTempo').value = sc.tempo;
+                    document.getElementById('valTempo').textContent = `${sc.tempo} BPM`;
+                    document.getElementById('selectRootKey').value = sc.rootKey;
+                    document.getElementById('selectMode').value = sc.mode;
+                    document.getElementById('selectTimeSig').value = sc.timeSig;
+                    document.getElementById('selectHarmonicRichness').value = sc.harmonicRichness;
+                    document.getElementById('selectLeftHandPattern').value = sc.leftHandPattern;
+                    document.getElementById('selectRightHandDensity').value = String(sc.rightHandDensity);
+                    document.getElementById('selectIntervalLeap').value = sc.intervalLeap;
+
+                    rebuildScoreStream();
+                });
+            });
+
+            listEl.querySelectorAll('[data-del-idx]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const idx = Number(btn.getAttribute('data-del-idx'));
+                    const list = loadSavedScenarios();
+                    list.splice(idx, 1);
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+                    renderSavedScenariosList();
+                });
+            });
+        }
+
+        // Toggle Play / Pause
+        function togglePlayPause() {
+            audioEngine.init();
+            AppState.isPlaying = !AppState.isPlaying;
+
+            const iconPlay = document.getElementById('iconPlay');
+            const iconPause = document.getElementById('iconPause');
+            const label = document.getElementById('labelPlayPause');
+
+            if (AppState.isPlaying) {
+                iconPlay.classList.add('hidden');
+                iconPause.classList.remove('hidden');
+                label.textContent = 'Pause';
+                AppState.lastFrameTime = performance.now();
+
+                // If user starts playback in "Attente MIDI" mode, switch smoothly to continuous or step
+                if (AppState.scrollMode === 'midi_wait') {
+                    advanceOneSubBeatStep(true);
+                }
+            } else {
+                iconPlay.classList.remove('hidden');
+                iconPause.classList.add('hidden');
+                label.textContent = 'Lecture';
+            }
+        }
+
+        // Bind all DOM Event Listeners
+        function bindEventListeners() {
+            // Drawer toggle
+            const drawer = document.getElementById('configDrawer');
+            document.getElementById('btnToggleDrawer').addEventListener('click', () => {
+                drawer.classList.toggle('hidden');
+                setTimeout(() => {
+                    renderScore();
+                    renderPianoKeyboard();
+                }, 50);
+            });
+
+            // Transport controls
+            document.getElementById('btnPlayPause').addEventListener('click', togglePlayPause);
+            document.getElementById('btnStepMeasure').addEventListener('click', () => {
+                audioEngine.init();
+                advanceOneSubBeatStep(true);
+            });
+            document.getElementById('btnRegenerate').addEventListener('click', () => {
+                audioEngine.init();
+                rebuildScoreStream();
+            });
+
+            // Tempo slider
+            document.getElementById('sliderTempo').addEventListener('input', (e) => {
+                AppState.tempo = Number(e.target.value);
+                document.getElementById('valTempo').textContent = `${AppState.tempo} BPM`;
+            });
+
+            // Scroll Mode selector
+            document.getElementById('selectScrollMode').addEventListener('change', (e) => {
+                AppState.scrollMode = e.target.value;
+                if (AppState.scrollMode === 'midi_wait') {
+                    AppState.isPlaying = false;
+                    document.getElementById('iconPlay').classList.remove('hidden');
+                    document.getElementById('iconPause').classList.add('hidden');
+                    document.getElementById('labelPlayPause').textContent = 'Lecture';
+                }
+                updateHudInfo();
+                renderScore();
+                renderPianoKeyboard();
+            });
+
+            // Felt & Reverb slider
+            document.getElementById('sliderReverb').addEventListener('input', (e) => {
+                audioEngine.updateReverbMix(Number(e.target.value) / 100);
+            });
+
+            // Metronome button
+            const btnMetro = document.getElementById('btnMetronome');
+            btnMetro.addEventListener('click', () => {
+                AppState.metronomeEnabled = !AppState.metronomeEnabled;
+                btnMetro.classList.toggle('text-amber-400', AppState.metronomeEnabled);
+                btnMetro.classList.toggle('border-amber-500/60', AppState.metronomeEnabled);
+            });
+
+            // View Layout toggle (Horizontal Ribbon vs Page Multi-Systems)
+            document.getElementById('btnViewLayout').addEventListener('click', () => {
+                AppState.viewLayout = AppState.viewLayout === 'ribbon' ? 'page' : 'ribbon';
+                document.getElementById('labelViewLayout').textContent =
+                    AppState.viewLayout === 'ribbon' ? 'Ruban' : 'Page';
+                renderScore();
+            });
+
+            // Sheet Theme toggle (Parchment vs Dark Nocturne)
+            document.getElementById('btnSheetTheme').addEventListener('click', () => {
+                AppState.sheetTheme = AppState.sheetTheme === 'parchment' ? 'dark' : 'parchment';
+                renderScore();
+            });
+
+            // Style Preset cards
+            document.querySelectorAll('.preset-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    audioEngine.init();
+                    applyStylePreset(btn.getAttribute('data-preset'));
+                });
+            });
+
+            // Deep customization controls (live regeneration of upcoming buffer)
+            document.getElementById('selectRootKey').addEventListener('change', (e) => {
+                AppState.rootKey = e.target.value;
+                refreshUpcomingMeasuresLive();
+            });
+            document.getElementById('selectMode').addEventListener('change', (e) => {
+                AppState.mode = e.target.value;
+                refreshUpcomingMeasuresLive();
+            });
+            document.getElementById('chkModulation').addEventListener('change', (e) => {
+                AppState.progressiveModulation = e.target.checked;
+            });
+            document.getElementById('selectHarmonicRichness').addEventListener('change', (e) => {
+                AppState.harmonicRichness = e.target.value;
+                refreshUpcomingMeasuresLive();
+            });
+            document.getElementById('selectLeftHandPattern').addEventListener('change', (e) => {
+                AppState.leftHandPattern = e.target.value;
+                refreshUpcomingMeasuresLive();
+            });
+            document.getElementById('selectRightHandDensity').addEventListener('change', (e) => {
+                AppState.rightHandDensity = Number(e.target.value);
+                refreshUpcomingMeasuresLive();
+            });
+            document.getElementById('selectTimeSig').addEventListener('change', (e) => {
+                AppState.timeSig = e.target.value;
+                rebuildScoreStream();
+            });
+            document.getElementById('selectIntervalLeap').addEventListener('change', (e) => {
+                AppState.intervalLeap = e.target.value;
+                refreshUpcomingMeasuresLive();
+            });
+            document.getElementById('chkLedgerLines').addEventListener('change', (e) => {
+                AppState.allowLedgerLines = e.target.checked;
+                refreshUpcomingMeasuresLive();
+            });
+
+            // Visual Aids toggles
+            document.getElementById('chkShowChords').addEventListener('change', (e) => {
+                AppState.showChords = e.target.checked;
+                renderScore();
+            });
+            document.getElementById('chkShowRoman').addEventListener('change', (e) => {
+                AppState.showRoman = e.target.checked;
+                renderScore();
+            });
+            document.getElementById('chkHighlightGuideTones').addEventListener('change', (e) => {
+                AppState.highlightGuideTones = e.target.checked;
+                renderScore();
+                renderPianoKeyboard();
+            });
+            document.getElementById('selectNoteNames').addEventListener('change', (e) => {
+                AppState.noteNameMode = e.target.value;
+                renderScore();
+            });
+
+            // Save Custom Scenario
+            document.getElementById('btnSaveScenario').addEventListener('click', () => {
+                const input = document.getElementById('inputScenarioName');
+                const name = input.value.trim() || `Scénario ${AppState.rootKey} ${MODE_LABELS_FR[AppState.mode]}`;
+                const list = loadSavedScenarios();
+                list.unshift({
+                    name,
+                    tempo: AppState.tempo,
+                    rootKey: AppState.rootKey,
+                    mode: AppState.mode,
+                    timeSig: AppState.timeSig,
+                    harmonicRichness: AppState.harmonicRichness,
+                    leftHandPattern: AppState.leftHandPattern,
+                    rightHandDensity: AppState.rightHandDensity,
+                    intervalLeap: AppState.intervalLeap
+                });
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(list.slice(0, 12)));
+                input.value = '';
+                renderSavedScenariosList();
+            });
+
+            // Score Canvas Click: jump to clicked measure/beat and audition chord
+            scoreCanvas.addEventListener('click', (e) => {
+                audioEngine.init();
+                const rect = scoreCanvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                for (const box of renderedBeatHitboxes) {
+                    if (x >= box.x1 && x <= box.x2 && y >= box.y1 && y <= box.y2) {
+                        AppState.currentMeasureIndex = box.measureIndex;
+                        AppState.currentBeatFloat = box.beat;
+                        ensureInfiniteBuffer();
+                        const meas = AppState.measures[AppState.currentMeasureIndex];
+                        triggerMeasureBeatAudio(meas, box.beat, true);
+                        updateHudInfo();
+                        renderScore();
+                        break;
+                    }
+                }
+            });
+
+            // Interactive Piano Keyboard Mouse / Touch Events
+            let isPointerDownOnPiano = false;
+            let lastPointerMidi = null;
+
+            pianoCanvas.addEventListener('pointerdown', (e) => {
+                audioEngine.init();
+                isPointerDownOnPiano = true;
+                const midi = getPianoMidiAtPoint(e.clientX, e.clientY);
+                if (midi !== null) {
+                    lastPointerMidi = midi;
+                    handleUserNoteOn(midi, 0.72);
+                }
+            });
+
+            pianoCanvas.addEventListener('pointermove', (e) => {
+                if (!isPointerDownOnPiano) return;
+                const midi = getPianoMidiAtPoint(e.clientX, e.clientY);
+                if (midi !== null && midi !== lastPointerMidi) {
+                    if (lastPointerMidi !== null) handleUserNoteOff(lastPointerMidi);
+                    lastPointerMidi = midi;
+                    handleUserNoteOn(midi, 0.65);
+                }
+            });
+
+            window.addEventListener('pointerup', () => {
+                if (isPointerDownOnPiano) {
+                    isPointerDownOnPiano = false;
+                    if (lastPointerMidi !== null) {
+                        handleUserNoteOff(lastPointerMidi);
+                        lastPointerMidi = null;
+                    }
+                }
+            });
+
+            // Keyboard shortcuts (Space = Play/Pause, Right Arrow = Step Beat, R = Regenerate)
+            window.addEventListener('keydown', (e) => {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+                if (e.code === 'Space') {
+                    e.preventDefault();
+                    togglePlayPause();
+                } else if (e.code === 'ArrowRight') {
+                    e.preventDefault();
+                    audioEngine.init();
+                    advanceOneSubBeatStep(true);
+                }
+            });
+
+            // Responsive Resize handler
+            window.addEventListener('resize', () => {
+                renderScore();
+                renderPianoKeyboard();
+            });
+        }
+
+        // Application Bootstrap on window load
+        window.onload = function () {
+            bindEventListeners();
+            renderSavedScenariosList();
+            initWebMIDI();
+            applyStylePreset('gymnopedie');
+            requestAnimationFrame(animationLoop);
+        };
+    </script>
+</body>
+</html>
