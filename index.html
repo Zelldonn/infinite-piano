@@ -230,8 +230,24 @@
             </div>
         </div>
 
-        <!-- Right Controls: Reverb, Metronome, Layout, Theme, Fullscreen -->
+        <!-- Right Controls: Pedagogy Quick-Toggles, Reverb, Metronome, Layout, Theme, Fullscreen -->
         <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
+            <!-- Quick Pedagogical Toggles (Look-Ahead, Ear Training, Improvisation) -->
+            <div class="flex items-center gap-1 bg-studio-950/60 p-0.5 rounded-lg border border-studio-800">
+                <button id="btnLookAhead" class="px-1.5 py-1 rounded-md text-[11px] font-medium text-studio-300 hover:text-parchment-100 hover:bg-studio-800 transition flex items-center gap-1" title="Regard en avance : masque progressivement le temps ou la mesure en cours pour forcer l'œil à anticiper">
+                    <span>👁️</span>
+                    <span id="labelLookAhead" class="hidden md:inline">Regard</span>
+                </button>
+                <button id="btnEarTraining" class="px-1.5 py-1 rounded-md text-[11px] font-medium text-studio-300 hover:text-parchment-100 hover:bg-studio-800 transition flex items-center gap-1" title="Oreille musicale : insère des mesures mystères (1re note affichée, suite jouée au piano à retrouver à l'oreille)">
+                    <span>👂</span>
+                    <span class="hidden md:inline">Oreille</span>
+                </button>
+                <button id="btnImproMeasure" class="px-1.5 py-1 rounded-md text-[11px] font-medium text-studio-300 hover:text-parchment-100 hover:bg-studio-800 transition flex items-center gap-1" title="Mesure d'improvisation : la main gauche accompagne et la main droite affiche les notes cibles (losanges) pour improviser">
+                    <span>✨</span>
+                    <span class="hidden md:inline">Impro</span>
+                </button>
+            </div>
+
             <!-- Reverb Slider -->
             <div class="hidden 2xl:flex items-center gap-2 bg-studio-950/60 px-2.5 py-1 rounded-lg border border-studio-800/80" title="Dosage de la réverbération acoustique">
                 <span class="text-[10px] uppercase tracking-wider text-studio-400">Reverb</span>
@@ -525,9 +541,44 @@
 
                 <hr class="border-studio-800">
 
-                <!-- 6. SAUVEGARDE DE SCÉNARIOS PERSONNALISÉS -->
+                <!-- 5B. ENTRAÎNEMENT COGNITIF : REGARD EN AVANCE, OREILLE & IMPROVISATION -->
+                <section class="space-y-2.5">
+                    <h2 class="text-xs font-semibold uppercase tracking-wider text-amber-400">6. Regard en Avance, Oreille & Impro</h2>
+
+                    <div class="flex items-center justify-between p-2 rounded-lg bg-studio-850/70 border border-studio-800">
+                        <div>
+                            <span class="text-xs text-parchment-100 font-medium block">👁️ Regard en avance (Masquage)</span>
+                            <span class="text-[10px] text-studio-400">Efface le présent pour forcer l'œil à lire la suite</span>
+                        </div>
+                        <select id="selectLookAheadMode" class="bg-studio-900 text-parchment-100 text-xs rounded px-2 py-1 border border-studio-700 focus:outline-none focus:border-amber-500">
+                            <option value="off" selected>Désactivé</option>
+                            <option value="beat">+1 Temps d'avance</option>
+                            <option value="measure">+1 Mesure entière</option>
+                        </select>
+                    </div>
+
+                    <label class="flex items-center justify-between p-2 rounded-lg bg-studio-850/70 border border-studio-800 cursor-pointer">
+                        <div class="pr-2">
+                            <span class="text-xs text-parchment-100 font-medium block">👂 Mesures « À l'oreille » (Dictée)</span>
+                            <span class="text-[10px] text-studio-400">1re note affichée, suite masquée par <code class="text-violet-300">?</code> à reproduire à l'écoute</span>
+                        </div>
+                        <input id="chkEarTraining" type="checkbox" class="w-4 h-4 accent-amber-500 rounded shrink-0">
+                    </label>
+
+                    <label class="flex items-center justify-between p-2 rounded-lg bg-studio-850/70 border border-studio-800 cursor-pointer">
+                        <div class="pr-2">
+                            <span class="text-xs text-parchment-100 font-medium block">✨ Mesures d'Improvisation guidée</span>
+                            <span class="text-[10px] text-studio-400">La MG accompagne, la MD affiche les notes cibles (<code class="text-amber-300">◆</code>) à improviser</span>
+                        </div>
+                        <input id="chkImproMeasure" type="checkbox" class="w-4 h-4 accent-amber-500 rounded shrink-0">
+                    </label>
+                </section>
+
+                <hr class="border-studio-800">
+
+                <!-- 7. SAUVEGARDE DE SCÉNARIOS PERSONNALISÉS -->
                 <section class="space-y-2.5 pb-4">
-                    <h2 class="text-xs font-semibold uppercase tracking-wider text-amber-400">6. Mes Scénarios Sauvegardés</h2>
+                    <h2 class="text-xs font-semibold uppercase tracking-wider text-amber-400">7. Mes Scénarios Sauvegardés</h2>
                     <div class="flex gap-1.5">
                         <input id="inputScenarioName" type="text" placeholder="Nom du scénario (ex: Dorien Calme)" class="flex-1 bg-studio-850 text-parchment-100 text-xs rounded-lg px-2.5 py-1.5 border border-studio-700 focus:outline-none focus:border-amber-500">
                         <button id="btnSaveScenario" class="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-medium transition">
@@ -557,6 +608,9 @@
                     </div>
 
                     <div class="flex items-center gap-2 text-[11px]">
+                        <button id="pedagogyActiveBanner" class="hidden pointer-events-auto items-center gap-1.5 px-2.5 py-1 rounded-full bg-studio-900/90 border border-amber-400/60 text-amber-300 shadow hover:bg-studio-800 transition cursor-pointer">
+                            <span id="pedagogyBannerText">✨ Mode actif</span>
+                        </button>
                         <div id="midiWaitBanner" class="hidden items-center gap-1.5 px-2.5 py-1 rounded-full bg-studio-900/90 border border-amber-400/60 text-amber-300 shadow">
                             <span>Attente :</span>
                             <strong id="midiExpectedNotesLabel" class="font-mono">Ré, Fa, La</strong>
@@ -706,11 +760,14 @@
             intervalLeap: 'moderate',
             allowLedgerLines: true,
 
-            // Visual Aids
+            // Visual Aids & Cognitive Pedagogy (Look-Ahead, Ear Training, Improvisation)
             showChords: true,
             showRoman: true,
             highlightGuideTones: true,
             noteNameMode: 'fr', // 'none' | 'fr' | 'en'
+            lookAheadMode: 'off', // 'off' | 'beat' | 'measure'
+            earTrainingEnabled: false,
+            improMeasureEnabled: false,
 
             // Infinite Score Buffer & Playhead
             measures: [],
@@ -1644,6 +1701,24 @@
                 beatCursor += dur;
             }
 
+            // Compute comfortable Treble register guide/chord tones (C4=60 to G5=79) for Guided Improvisation
+            const improGuideMidis = [];
+            const targetPcs = [chord.rootPc, chord.thirdPc, chord.fifthPc, chord.seventhPc];
+            let cursorMidi = 60 + chord.rootPc;
+            if (cursorMidi < 62) cursorMidi += 12; // Keep nicely centered on the Treble staff
+            for (const pc of targetPcs) {
+                let candidate = 60 + pc;
+                while (candidate < cursorMidi - 2) candidate += 12;
+                while (candidate > 79) candidate -= 12;
+                if (!improGuideMidis.includes(candidate)) {
+                    improGuideMidis.push(candidate);
+                }
+                cursorMidi = candidate;
+            }
+            improGuideMidis.sort((a, b) => a - b);
+
+            const pedFlags = computePedagogyFlagsForMeasureIndex(measureIndex);
+
             return {
                 index: measureIndex,
                 rootKey,
@@ -1652,8 +1727,39 @@
                 beatsPerMeasure,
                 chord,
                 lhEvents,
-                rhEvents
+                rhEvents,
+                improGuideMidis,
+                isEarTraining: pedFlags.isEarTraining,
+                earRevealed: false,
+                isImprovisation: pedFlags.isImprovisation
             };
+        }
+
+        // Determine if a measure index is an Ear Training or Guided Improvisation measure
+        function computePedagogyFlagsForMeasureIndex(measureIndex) {
+            let isEarTraining = false;
+            let isImprovisation = false;
+            if (AppState.earTrainingEnabled && AppState.improMeasureEnabled) {
+                isEarTraining = (measureIndex % 4 === 1);
+                isImprovisation = (measureIndex % 4 === 3);
+            } else if (AppState.earTrainingEnabled) {
+                isEarTraining = (measureIndex > 0 && measureIndex % 2 === 1);
+            } else if (AppState.improMeasureEnabled) {
+                isImprovisation = (measureIndex > 0 && measureIndex % 2 === 1);
+            }
+            return { isEarTraining, isImprovisation };
+        }
+
+        // Update existing buffered measures immediately when user toggles Ear Training or Improvisation
+        function syncPedagogyFlagsOnMeasures() {
+            for (const m of AppState.measures) {
+                const flags = computePedagogyFlagsForMeasureIndex(m.index);
+                m.isEarTraining = flags.isEarTraining;
+                m.isImprovisation = flags.isImprovisation;
+                if (!m.isEarTraining) m.earRevealed = false;
+            }
+            updateHudInfo();
+            renderScore();
         }
 
         // Populate initial sliding window of measures
@@ -2095,12 +2201,17 @@
             }
         }
 
-        // Draw all musical contents of a single measure (Chord symbol, Roman numeral, notes, beams, barline)
+        // Draw all musical contents of a single measure (Chord symbol, Roman numeral, notes, beams, barline, and Pedagogy overlays)
         function drawSingleMeasure(ctx, measure, measX, measWidth, trebleTopY, bassTopY, lineGap, palette, isCompact = false) {
             const staffHeight = lineGap * 4;
             const padLeft = isCompact ? 18 : 26;
             const padRight = isCompact ? 12 : 18;
             const usableWidth = Math.max(64, measWidth - padLeft - padRight);
+
+            // Auto-reveal past Ear Training measures once playhead moves to a subsequent measure
+            if (measure.isEarTraining && measure.index < AppState.currentMeasureIndex) {
+                measure.earRevealed = true;
+            }
 
             // Register beat hitboxes for mouse/touch interaction
             for (let b = 0; b < measure.beatsPerMeasure; b += 0.5) {
@@ -2113,6 +2224,69 @@
                     y1: trebleTopY - 36,
                     y2: bassTopY + staffHeight + 36
                 });
+            }
+
+            // 0. Pedagogical Background Tints & Banners (Improvisation / Ear Training / Look-Ahead)
+            if (measure.isImprovisation) {
+                ctx.save();
+                ctx.fillStyle = AppState.sheetTheme === 'dark' ? 'rgba(245, 158, 11, 0.10)' : 'rgba(217, 119, 6, 0.08)';
+                ctx.strokeStyle = AppState.sheetTheme === 'dark' ? 'rgba(245, 158, 11, 0.45)' : 'rgba(180, 83, 9, 0.35)';
+                ctx.lineWidth = 1.2;
+                ctx.setLineDash([4, 3]);
+                ctx.beginPath();
+                ctx.roundRect(measX + 3, trebleTopY - lineGap * 1.6, measWidth - 6, staffHeight + lineGap * 3.2, 6);
+                ctx.fill();
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                ctx.font = `600 ${isCompact ? 9 : 10}px "Inter", sans-serif`;
+                ctx.fillStyle = palette.guideTone;
+                const improLabel = isCompact ? '✨ IMPRO (◆ cibles)' : '✨ IMPROVISATION LIBRE (Notes cibles ◆)';
+                ctx.fillText(improLabel, measX + padLeft + (AppState.showChords ? 48 : 0), trebleTopY - (isCompact ? 15 : 22));
+                ctx.restore();
+            } else if (measure.isEarTraining) {
+                ctx.save();
+                const isRev = measure.earRevealed;
+                ctx.fillStyle = isRev
+                    ? (AppState.sheetTheme === 'dark' ? 'rgba(16, 185, 129, 0.08)' : 'rgba(5, 150, 105, 0.06)')
+                    : (AppState.sheetTheme === 'dark' ? 'rgba(139, 92, 246, 0.11)' : 'rgba(124, 58, 237, 0.07)');
+                ctx.strokeStyle = isRev
+                    ? (AppState.sheetTheme === 'dark' ? 'rgba(52, 211, 153, 0.4)' : 'rgba(5, 150, 105, 0.35)')
+                    : (AppState.sheetTheme === 'dark' ? 'rgba(167, 139, 250, 0.45)' : 'rgba(124, 58, 237, 0.35)');
+                ctx.lineWidth = 1.2;
+                ctx.setLineDash([4, 3]);
+                ctx.beginPath();
+                ctx.roundRect(measX + 3, trebleTopY - lineGap * 1.6, measWidth - 6, staffHeight + lineGap * 3.2, 6);
+                ctx.fill();
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                ctx.font = `600 ${isCompact ? 9 : 10}px "Inter", sans-serif`;
+                ctx.fillStyle = isRev
+                    ? (AppState.sheetTheme === 'dark' ? '#34d399' : '#047857')
+                    : (AppState.sheetTheme === 'dark' ? '#c4b5fd' : '#6d28d9');
+                const earLabel = isRev
+                    ? '👂 RÉVÉLÉ ✓'
+                    : (isCompact ? '👂 À L\'OREILLE (Toucher)' : '👂 À L\'OREILLE (1re note → écoutez !)');
+                ctx.fillText(earLabel, measX + padLeft + (AppState.showChords ? 48 : 0), trebleTopY - (isCompact ? 15 : 22));
+                ctx.restore();
+            }
+
+            // Look-Ahead Target Indicator ("Regard en avance")
+            if (AppState.lookAheadMode === 'measure' && measure.index === AppState.currentMeasureIndex + 1) {
+                ctx.save();
+                ctx.font = `600 ${isCompact ? 9 : 10}px "Inter", sans-serif`;
+                ctx.fillStyle = AppState.sheetTheme === 'dark' ? '#38bdf8' : '#0284c7';
+                ctx.fillText('👁️ CIBLE DU REGARD →', measX + padLeft + (AppState.showChords ? 52 : 0), trebleTopY - (isCompact ? 26 : 34));
+                ctx.restore();
+            } else if (AppState.lookAheadMode === 'beat' && measure.index === AppState.currentMeasureIndex) {
+                const targetBeat = Math.min(measure.beatsPerMeasure - 0.3, AppState.currentBeatFloat + 1.0);
+                const eyeX = measX + padLeft + (targetBeat / measure.beatsPerMeasure) * usableWidth;
+                ctx.save();
+                ctx.font = `600 ${isCompact ? 9 : 10}px "JetBrains Mono", monospace`;
+                ctx.fillStyle = AppState.sheetTheme === 'dark' ? '#38bdf8' : '#0284c7';
+                ctx.fillText('👁️+1t', eyeX - 12, trebleTopY - (isCompact ? 25 : 32));
+                ctx.restore();
             }
 
             // 1. Measure number & Chord Symbol above Treble Staff
@@ -2135,13 +2309,27 @@
             }
             ctx.restore();
 
-            // 3. Draw Right Hand (Treble) Events
-            drawStaffEvents(ctx, measure.rhEvents, measure, true, measX + padLeft, usableWidth, trebleTopY, lineGap, palette);
+            // 3. Draw Right Hand (Treble) Events — or Guided Improvisation Diamond Targets
+            if (measure.isImprovisation) {
+                drawImprovisationGuideMeasure(ctx, measure, measX + padLeft, usableWidth, trebleTopY, lineGap, palette);
+            } else {
+                drawStaffEvents(ctx, measure.rhEvents, measure, true, measX + padLeft, usableWidth, trebleTopY, lineGap, palette);
+            }
 
             // 4. Draw Left Hand (Bass) Events
             drawStaffEvents(ctx, measure.lhEvents, measure, false, measX + padLeft, usableWidth, bassTopY, lineGap, palette);
 
-            // 5. Measure ending barline
+            // 5. If Look-Ahead Measure Masking is active on current measure, draw subtle veil reminder
+            if (AppState.lookAheadMode === 'measure' && measure.index === AppState.currentMeasureIndex && (AppState.isPlaying || AppState.currentBeatFloat > 0.05)) {
+                ctx.save();
+                ctx.font = `600 ${isCompact ? 9 : 10}px "Inter", sans-serif`;
+                ctx.fillStyle = AppState.sheetTheme === 'dark' ? 'rgba(56, 189, 248, 0.78)' : 'rgba(2, 132, 199, 0.78)';
+                const midStaffY = (trebleTopY + lineGap * 4 + bassTopY) / 2 + 3;
+                ctx.fillText('👁️ Mesure masquée — Lisez la mesure suivante →', measX + padLeft, midStaffY);
+                ctx.restore();
+            }
+
+            // 6. Measure ending barline
             ctx.save();
             ctx.strokeStyle = palette.staffLine;
             ctx.lineWidth = 1.3;
@@ -2152,12 +2340,94 @@
             ctx.restore();
         }
 
-        // Draw events (notes, rests, stems, beams, ledger lines, guide tones, note names) for one staff
+        // Draw diamond-shaped chord/guide-tone cues in Treble Staff for Guided Improvisation measures
+        function drawImprovisationGuideMeasure(ctx, measure, startX, usableWidth, staffTopY, lineGap, palette) {
+            const keyInfo = KEY_SIGNATURES[measure.rootKey] || KEY_SIGNATURES['C'];
+            const guideMidis = measure.improGuideMidis || [62, 65, 69, 72];
+            const count = guideMidis.length;
+
+            // Check if Look-Ahead masking should fade this measure
+            const isMeasureMasked = (
+                AppState.lookAheadMode === 'measure' &&
+                measure.index === AppState.currentMeasureIndex &&
+                (AppState.isPlaying || AppState.currentBeatFloat > 0.05)
+            );
+
+            ctx.save();
+            if (isMeasureMasked) ctx.globalAlpha = 0.10;
+
+            for (let idx = 0; idx < count; idx++) {
+                const midi = guideMidis[idx];
+                const beatPos = (idx / count) * measure.beatsPerMeasure;
+                const x = startX + ((idx + 0.35) / count) * usableWidth;
+
+                const isBeatMasked = (
+                    AppState.lookAheadMode === 'beat' &&
+                    measure.index === AppState.currentMeasureIndex &&
+                    beatPos <= AppState.currentBeatFloat + 0.15
+                );
+
+                ctx.save();
+                if (isBeatMasked) ctx.globalAlpha = 0.10;
+
+                const info = midiToStaffStepAndAccidental(midi, measure.rootKey);
+                const y = stepToStaffY(info.step, true, staffTopY, lineGap);
+                const isGuide = measure.chord.guideTonePcs.has(info.pc);
+
+                // Draw ledger lines if needed
+                drawLedgerLines(ctx, x, [{ midi, ...info, y }], true, staffTopY, lineGap, palette);
+
+                // Draw hollow diamond notehead (◆)
+                const dx = lineGap * 0.72;
+                const dy = lineGap * 0.52;
+                const color = isGuide ? palette.guideTone : palette.rhHighlight;
+
+                ctx.fillStyle = AppState.sheetTheme === 'dark' ? 'rgba(245, 158, 11, 0.22)' : 'rgba(217, 119, 6, 0.16)';
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2.0;
+
+                ctx.beginPath();
+                ctx.moveTo(x, y - dy);
+                ctx.lineTo(x + dx, y);
+                ctx.lineTo(x, y + dy);
+                ctx.lineTo(x - dx, y);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+
+                // Accidental if any
+                if (info.accidental) {
+                    ctx.fillStyle = color;
+                    ctx.font = `600 ${Math.round(lineGap * 1.7)}px "Cormorant Garamond", serif`;
+                    ctx.fillText(info.accidental, x - dx - 10, y + lineGap * 0.45);
+                }
+
+                // Always show note name + role (Tonique, 3ce, 5te, 7e) on Improvisation diamonds
+                const noteName = formatPitchClass(info.pc, keyInfo.useFlats, AppState.noteNameMode === 'en' ? 'en' : 'fr');
+                const roleTag = isGuide ? '★' : '';
+                ctx.font = `600 9.5px "JetBrains Mono", monospace`;
+                ctx.fillStyle = color;
+                ctx.fillText(`${noteName}${roleTag}`, x - 8, y - lineGap * 1.05);
+
+                ctx.restore();
+            }
+
+            ctx.restore();
+        }
+
+        // Draw events (notes, rests, stems, beams, ledger lines, guide tones, note names, and Ear/Look-Ahead masks) for one staff
         function drawStaffEvents(ctx, events, measure, isTreble, startX, usableWidth, staffTopY, lineGap, palette) {
             const keyInfo = KEY_SIGNATURES[measure.rootKey] || KEY_SIGNATURES['C'];
 
             // Track eighth-note pairs on the same beat so we can beam them together cleanly
             let pendingBeamEvent = null;
+
+            // Check if entire measure is masked by Look-Ahead ('measure' mode)
+            const isWholeMeasureLookAheadMasked = (
+                AppState.lookAheadMode === 'measure' &&
+                measure.index === AppState.currentMeasureIndex &&
+                (AppState.isPlaying || AppState.currentBeatFloat > 0.05)
+            );
 
             for (let i = 0; i < events.length; i++) {
                 const ev = events[i];
@@ -2169,11 +2439,66 @@
                     AppState.currentBeatFloat < ev.startBeat + ev.durationBeats - 0.05
                 );
 
+                // Check if this specific beat is masked by Look-Ahead ('beat' mode)
+                const isBeatLookAheadMasked = (
+                    AppState.lookAheadMode === 'beat' &&
+                    measure.index === AppState.currentMeasureIndex &&
+                    ev.startBeat <= AppState.currentBeatFloat + 0.15
+                );
+
+                const eventAlpha = (isWholeMeasureLookAheadMasked || isBeatLookAheadMasked) ? 0.08 : 1.0;
+
                 if (ev.isRest || ev.notes.length === 0) {
+                    ctx.save();
+                    ctx.globalAlpha = eventAlpha;
                     drawRestGlyph(ctx, x, staffTopY, lineGap, ev.durationBeats, palette);
+                    ctx.restore();
                     pendingBeamEvent = null;
                     continue;
                 }
+
+                // EAR TRAINING MYSTERY MASKING:
+                // In an unrevealed Ear Training measure on the Treble Staff, show the 1st note (i === 0) as the anchor
+                // and replace subsequent notes (i > 0) with a rhythmic '?' mystery badge!
+                if (isTreble && measure.isEarTraining && !measure.earRevealed && i > 0) {
+                    ctx.save();
+                    ctx.globalAlpha = eventAlpha;
+                    const midY = staffTopY + lineGap * 2;
+                    const pillRadius = lineGap * 0.85;
+
+                    ctx.fillStyle = isCurrentlyPlaying
+                        ? (AppState.sheetTheme === 'dark' ? 'rgba(167, 139, 250, 0.35)' : 'rgba(124, 58, 237, 0.22)')
+                        : (AppState.sheetTheme === 'dark' ? 'rgba(139, 92, 246, 0.18)' : 'rgba(124, 58, 237, 0.12)');
+                    ctx.strokeStyle = isCurrentlyPlaying
+                        ? '#a78bfa'
+                        : (AppState.sheetTheme === 'dark' ? 'rgba(167, 139, 250, 0.65)' : 'rgba(109, 40, 217, 0.55)');
+                    ctx.lineWidth = isCurrentlyPlaying ? 2.0 : 1.3;
+
+                    ctx.beginPath();
+                    ctx.arc(x, midY, pillRadius, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    ctx.font = `700 ${Math.round(lineGap * 1.25)}px "JetBrains Mono", monospace`;
+                    ctx.fillStyle = isCurrentlyPlaying
+                        ? (AppState.sheetTheme === 'dark' ? '#ede9fe' : '#4c1d95')
+                        : (AppState.sheetTheme === 'dark' ? '#c4b5fd' : '#6d28d9');
+                    ctx.fillText('?', x - 3.5, midY + 4);
+
+                    // Subtle rhythmic stem tick below the '?' so the user still sees the rhythm
+                    if (ev.durationBeats < 4) {
+                        ctx.beginPath();
+                        ctx.moveTo(x, midY + pillRadius);
+                        ctx.lineTo(x, midY + pillRadius + lineGap * 1.1);
+                        ctx.stroke();
+                    }
+                    ctx.restore();
+                    pendingBeamEvent = null;
+                    continue;
+                }
+
+                ctx.save();
+                ctx.globalAlpha = eventAlpha;
 
                 // Compute staff positions for all notes in this event
                 const noteInfos = ev.notes.map(midi => {
@@ -2251,6 +2576,13 @@
                         ctx.fillText(label, noteX - 6, labelY);
                     }
 
+                    // Anchor badge on 1st note of an Ear Training measure
+                    if (isTreble && measure.isEarTraining && !measure.earRevealed && i === 0 && nIdx === 0) {
+                        ctx.font = `600 8.5px "Inter", sans-serif`;
+                        ctx.fillStyle = AppState.sheetTheme === 'dark' ? '#c4b5fd' : '#6d28d9';
+                        ctx.fillText('1re note', noteX - 12, bottomNote.y + lineGap * 2.1);
+                    }
+
                     ctx.restore();
                 }
 
@@ -2316,6 +2648,9 @@
                     ctx.stroke();
                     ctx.restore();
                 }
+
+                // Restore event-level Look-Ahead alpha wrapper
+                ctx.restore();
             }
         }
 
@@ -2405,11 +2740,15 @@
             }
 
             // Trigger Right Hand events starting at this subBeat
-            for (const ev of measure.rhEvents) {
-                if (!ev.isRest && Math.abs(ev.startBeat - subBeat) < 0.05) {
-                    const durSec = ev.durationBeats * beatDurationSec;
-                    for (const midi of ev.notes) {
-                        if (playSound) audioEngine.playNote(midi, durSec, 0.74);
+            // In a Guided Improvisation measure, mute the procedural Right Hand so the user can improvise freely over the Left Hand!
+            if (!measure.isImprovisation) {
+                const rhVel = measure.isEarTraining ? 0.84 : 0.74; // Slightly emphasize melody in Ear Training measures
+                for (const ev of measure.rhEvents) {
+                    if (!ev.isRest && Math.abs(ev.startBeat - subBeat) < 0.05) {
+                        const durSec = ev.durationBeats * beatDurationSec;
+                        for (const midi of ev.notes) {
+                            if (playSound) audioEngine.playNote(midi, durSec, rhVel);
+                        }
                     }
                 }
             }
@@ -2656,6 +2995,89 @@
                 banner.classList.add('hidden');
                 banner.classList.remove('flex');
             }
+
+            // Update floating Pedagogy Status Banner (Ear Training / Improvisation / Look-Ahead)
+            const pedBanner = document.getElementById('pedagogyActiveBanner');
+            const pedText = document.getElementById('pedagogyBannerText');
+            if (pedBanner && pedText) {
+                if (measure.isEarTraining && !measure.earRevealed) {
+                    pedBanner.classList.remove('hidden');
+                    pedBanner.classList.add('flex');
+                    pedBanner.className = 'pointer-events-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-950/90 border border-violet-400/70 text-violet-200 shadow hover:bg-violet-900 transition cursor-pointer';
+                    pedText.textContent = '👂 À l\'oreille — Toucher pour révéler';
+                } else if (measure.isEarTraining && measure.earRevealed) {
+                    pedBanner.classList.remove('hidden');
+                    pedBanner.classList.add('flex');
+                    pedBanner.className = 'pointer-events-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-950/90 border border-emerald-400/70 text-emerald-200 shadow transition';
+                    pedText.textContent = '👂 Notes révélées ✓';
+                } else if (measure.isImprovisation) {
+                    pedBanner.classList.remove('hidden');
+                    pedBanner.classList.add('flex');
+                    pedBanner.className = 'pointer-events-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-950/90 border border-amber-400/70 text-amber-200 shadow transition';
+                    pedText.textContent = '✨ Improvisation MD (Cibles ◆)';
+                } else if (AppState.lookAheadMode !== 'off') {
+                    pedBanner.classList.remove('hidden');
+                    pedBanner.classList.add('flex');
+                    pedBanner.className = 'pointer-events-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-sky-950/90 border border-sky-400/70 text-sky-200 shadow transition';
+                    pedText.textContent = AppState.lookAheadMode === 'measure'
+                        ? '👁️ Regard +1 Mesure'
+                        : '👁️ Regard +1 Temps';
+                } else {
+                    pedBanner.classList.add('hidden');
+                    pedBanner.classList.remove('flex');
+                }
+            }
+        }
+
+        // Synchronize Look-Ahead mode ('off' | 'beat' | 'measure') across Header button & Drawer select
+        function setLookAheadMode(mode) {
+            AppState.lookAheadMode = mode;
+            const sel = document.getElementById('selectLookAheadMode');
+            if (sel && sel.value !== mode) sel.value = mode;
+
+            const btn = document.getElementById('btnLookAhead');
+            const lbl = document.getElementById('labelLookAhead');
+            if (btn) {
+                const active = mode !== 'off';
+                btn.className = active
+                    ? 'px-1.5 py-1 rounded-md text-[11px] font-medium bg-sky-500/20 text-sky-300 border border-sky-400/50 transition flex items-center gap-1'
+                    : 'px-1.5 py-1 rounded-md text-[11px] font-medium text-studio-300 hover:text-parchment-100 hover:bg-studio-800 transition flex items-center gap-1';
+            }
+            if (lbl) {
+                lbl.textContent = mode === 'beat' ? 'Regard +1t' : (mode === 'measure' ? 'Regard +1m' : 'Regard');
+            }
+            updateHudInfo();
+            renderScore();
+        }
+
+        // Synchronize Ear Training toggle across Header button & Drawer checkbox
+        function setEarTrainingEnabled(enabled) {
+            AppState.earTrainingEnabled = Boolean(enabled);
+            const chk = document.getElementById('chkEarTraining');
+            if (chk && chk.checked !== AppState.earTrainingEnabled) chk.checked = AppState.earTrainingEnabled;
+
+            const btn = document.getElementById('btnEarTraining');
+            if (btn) {
+                btn.className = AppState.earTrainingEnabled
+                    ? 'px-1.5 py-1 rounded-md text-[11px] font-medium bg-violet-500/25 text-violet-200 border border-violet-400/60 transition flex items-center gap-1'
+                    : 'px-1.5 py-1 rounded-md text-[11px] font-medium text-studio-300 hover:text-parchment-100 hover:bg-studio-800 transition flex items-center gap-1';
+            }
+            syncPedagogyFlagsOnMeasures();
+        }
+
+        // Synchronize Guided Improvisation toggle across Header button & Drawer checkbox
+        function setImproMeasureEnabled(enabled) {
+            AppState.improMeasureEnabled = Boolean(enabled);
+            const chk = document.getElementById('chkImproMeasure');
+            if (chk && chk.checked !== AppState.improMeasureEnabled) chk.checked = AppState.improMeasureEnabled;
+
+            const btn = document.getElementById('btnImproMeasure');
+            if (btn) {
+                btn.className = AppState.improMeasureEnabled
+                    ? 'px-1.5 py-1 rounded-md text-[11px] font-medium bg-amber-500/25 text-amber-200 border border-amber-400/60 transition flex items-center gap-1'
+                    : 'px-1.5 py-1 rounded-md text-[11px] font-medium text-studio-300 hover:text-parchment-100 hover:bg-studio-800 transition flex items-center gap-1';
+            }
+            syncPedagogyFlagsOnMeasures();
         }
 
         // Synchronize Sound Type across both Header and Drawer selectors & play audition note
@@ -3009,6 +3431,40 @@
                 renderScore();
             });
 
+            // Cognitive Pedagogy Controls (Look-Ahead, Ear Training, Improvisation)
+            document.getElementById('btnLookAhead').addEventListener('click', () => {
+                const order = ['off', 'beat', 'measure'];
+                const next = order[(order.indexOf(AppState.lookAheadMode) + 1) % order.length];
+                setLookAheadMode(next);
+            });
+            document.getElementById('selectLookAheadMode').addEventListener('change', (e) => {
+                setLookAheadMode(e.target.value);
+            });
+
+            document.getElementById('btnEarTraining').addEventListener('click', () => {
+                setEarTrainingEnabled(!AppState.earTrainingEnabled);
+            });
+            document.getElementById('chkEarTraining').addEventListener('change', (e) => {
+                setEarTrainingEnabled(e.target.checked);
+            });
+
+            document.getElementById('btnImproMeasure').addEventListener('click', () => {
+                setImproMeasureEnabled(!AppState.improMeasureEnabled);
+            });
+            document.getElementById('chkImproMeasure').addEventListener('change', (e) => {
+                setImproMeasureEnabled(e.target.checked);
+            });
+
+            // Clicking the floating pedagogy badge reveals the current Ear Training measure if unrevealed
+            document.getElementById('pedagogyActiveBanner').addEventListener('click', () => {
+                const meas = AppState.measures[AppState.currentMeasureIndex];
+                if (meas && meas.isEarTraining && !meas.earRevealed) {
+                    meas.earRevealed = true;
+                    updateHudInfo();
+                    renderScore();
+                }
+            });
+
             // Save Custom Scenario (including chosen Sound Type)
             document.getElementById('btnSaveScenario').addEventListener('click', () => {
                 const input = document.getElementById('inputScenarioName');
@@ -3086,6 +3542,10 @@
                         AppState.currentBeatFloat = box.beat;
                         ensureInfiniteBuffer();
                         const meas = AppState.measures[AppState.currentMeasureIndex];
+                        // If tapping an unrevealed Ear Training measure, reveal its hidden notes on second tap or if tapping upper staff
+                        if (meas && meas.isEarTraining && !meas.earRevealed && box.beat > 0) {
+                            meas.earRevealed = true;
+                        }
                         triggerMeasureBeatAudio(meas, box.beat, true);
                         updateHudInfo();
                         renderScore();
