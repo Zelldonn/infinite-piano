@@ -2,7 +2,7 @@
 <html lang="fr" class="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>L'Atelier Contemplatif — Déchiffrage Piano Infini</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -51,20 +51,26 @@
     </script>
 
     <style>
-        /* Custom styling for scrollbars, sliders, and responsive canvas */
+        /* Custom styling for scrollbars, sliders, and responsive smartphone landscape canvas */
         * {
             box-sizing: border-box;
             user-select: none;
+            -webkit-tap-highlight-color: transparent;
         }
-        body {
+        html, body {
+            height: 100vh;
+            height: 100dvh;
+            width: 100vw;
             background-color: #12100e;
             color: #e6dfd5;
             overflow: hidden;
+            padding-left: env(safe-area-inset-left, 0px);
+            padding-right: env(safe-area-inset-right, 0px);
         }
         /* Custom subtle scrollbar */
         ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
+            width: 5px;
+            height: 5px;
         }
         ::-webkit-scrollbar-track {
             background: #171513;
@@ -75,6 +81,14 @@
         }
         ::-webkit-scrollbar-thumb:hover {
             background: #544b42;
+        }
+        /* Hide scrollbar on compact horizontal header while keeping touch scroll */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
         }
         /* Range input styling */
         input[type="range"] {
@@ -103,132 +117,160 @@
             transform: scale(1.15);
             background-color: #f5b051;
         }
-        /* Piano key transitions */
-        .piano-key-white {
-            transition: background-color 0.08s ease, transform 0.06s ease;
-        }
-        .piano-key-black {
-            transition: background-color 0.08s ease, transform 0.06s ease;
-        }
-        .piano-key-active {
-            transform: translateY(2px);
-        }
         /* Subtle parchment grain overlay */
         .parchment-surface {
             background-image: radial-gradient(rgba(180, 155, 120, 0.06) 1px, transparent 0);
             background-size: 20px 20px;
         }
+        /* Smartphone horizontal (landscape) compact optimizations */
+        @media (max-height: 520px) {
+            #topHeader {
+                height: 2.6rem !important; /* 41.6px ultra-slim top bar in landscape */
+                padding-top: 0.15rem;
+                padding-bottom: 0.15rem;
+            }
+            #brandTitleBlock {
+                display: none !important;
+            }
+            #hintOverlayBanner {
+                display: none !important;
+            }
+            #hudOverlayBar {
+                top: 0.25rem !important;
+                left: 0.5rem !important;
+                right: 0.5rem !important;
+            }
+            #configDrawer {
+                width: min(86vw, 440px) !important;
+            }
+        }
     </style>
 </head>
-<body class="h-screen w-screen flex flex-col font-sans antialiased selection:bg-amber-500/30">
+<body class="flex flex-col font-sans antialiased selection:bg-amber-500/30">
 
-    <!-- ==================== TOP CONTROL BAR ==================== -->
-    <header class="h-16 bg-studio-900 border-b border-studio-800 px-3 lg:px-5 flex items-center justify-between gap-2 shrink-0 z-30 shadow-md">
-        <!-- Brand & Theme Quick Selector -->
-        <div class="flex items-center gap-3">
-            <button id="btnToggleDrawer" class="p-2 rounded-lg bg-studio-800 hover:bg-studio-700 text-studio-200 border border-studio-700/80 transition flex items-center gap-2 text-xs font-medium" title="Ouvrir/Fermer le panneau Scénarios & Paramétrage">
-                <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <!-- ==================== TOP CONTROL BAR (OPTIMIZED FOR SMARTPHONE LANDSCAPE) ==================== -->
+    <header id="topHeader" class="h-12 sm:h-14 bg-studio-900 border-b border-studio-800 px-2 sm:px-4 flex items-center justify-between gap-1.5 sm:gap-2 shrink-0 z-30 shadow-md overflow-x-auto no-scrollbar">
+        <!-- Left: Drawer Toggle & Brand -->
+        <div class="flex items-center gap-2 shrink-0">
+            <button id="btnToggleDrawer" class="px-2.5 py-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-studio-200 border border-studio-700/80 transition flex items-center gap-1.5 text-xs font-medium shrink-0" title="Ouvrir/Fermer le panneau Scénarios & Paramétrage">
+                <svg class="w-4 h-4 text-amber-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
                 </svg>
-                <span class="hidden sm:inline">Paramétrage</span>
+                <span class="hidden md:inline">Paramétrage</span>
             </button>
 
-            <div class="flex flex-col">
-                <div class="flex items-center gap-2">
-                    <h1 class="font-serif text-lg lg:text-xl font-semibold tracking-wide text-parchment-100 leading-none">L'Atelier Contemplatif</h1>
-                    <span id="activePresetBadge" class="hidden md:inline-block text-[11px] font-mono px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">Gymnopédie</span>
+            <div id="brandTitleBlock" class="hidden sm:flex flex-col">
+                <div class="flex items-center gap-1.5">
+                    <h1 class="font-serif text-base lg:text-lg font-semibold tracking-wide text-parchment-100 leading-none whitespace-nowrap">L'Atelier Contemplatif</h1>
+                    <span id="activePresetBadge" class="hidden xl:inline-block text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">Gymnopédie</span>
                 </div>
-                <span id="harmonicSummaryText" class="text-[11px] text-studio-400 font-mono hidden sm:block">Ré Dorien • 3/4 • Lecture infinie</span>
+                <span id="harmonicSummaryText" class="text-[10px] text-studio-400 font-mono hidden lg:block whitespace-nowrap">Ré Dorien • 3/4 • Lecture infinie</span>
             </div>
         </div>
 
-        <!-- Transport & Playback Controls -->
-        <div class="flex items-center gap-1.5 sm:gap-2.5 bg-studio-950/80 px-2.5 py-1.5 rounded-xl border border-studio-800">
+        <!-- Center: Transport, Sound Type & Tempo Controls -->
+        <div class="flex items-center gap-1.5 sm:gap-2 bg-studio-950/80 px-2 py-1 rounded-xl border border-studio-800 shrink-0">
             <!-- Play / Pause -->
-            <button id="btnPlayPause" class="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-studio-950 font-semibold text-xs flex items-center gap-1.5 shadow transition">
-                <svg id="iconPlay" class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+            <button id="btnPlayPause" class="px-2.5 sm:px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-studio-950 font-semibold text-xs flex items-center gap-1 shadow transition shrink-0">
+                <svg id="iconPlay" class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M8 5v14l11-7z"/>
                 </svg>
-                <svg id="iconPause" class="w-4 h-4 hidden" fill="currentColor" viewBox="0 0 24 24">
+                <svg id="iconPause" class="w-3.5 h-3.5 hidden" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
                 </svg>
                 <span id="labelPlayPause">Lecture</span>
             </button>
 
-            <!-- Step Next Beat / Measure -->
-            <button id="btnStepMeasure" class="p-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-studio-200 border border-studio-700 text-xs transition" title="Avancer d'un temps (Espace / Flèche droite)">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <!-- Step Next Beat -->
+            <button id="btnStepMeasure" class="p-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-studio-200 border border-studio-700 text-xs transition shrink-0" title="Avancer d'un temps (Espace / Flèche droite)">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/>
                 </svg>
             </button>
 
             <!-- Regenerate New Stream -->
-            <button id="btnRegenerate" class="px-2.5 py-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-studio-200 border border-studio-700 text-xs flex items-center gap-1.5 transition" title="Générer un nouveau flux harmonique infini">
+            <button id="btnRegenerate" class="px-2 py-1 rounded-lg bg-studio-800 hover:bg-studio-700 text-studio-200 border border-studio-700 text-xs flex items-center gap-1 transition shrink-0" title="Générer un nouveau flux harmonique infini">
                 <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                 </svg>
-                <span class="hidden md:inline">Nouveau flux</span>
+                <span class="hidden lg:inline">Nouveau</span>
             </button>
 
-            <div class="h-5 w-px bg-studio-800 mx-0.5 hidden sm:block"></div>
+            <div class="h-4 w-px bg-studio-800 mx-0.5"></div>
 
-            <!-- Tempo Slider -->
-            <div class="hidden sm:flex items-center gap-2 px-1">
-                <div class="flex flex-col text-right">
-                    <span class="text-[10px] uppercase tracking-wider text-studio-400">Tempo</span>
-                    <span id="valTempo" class="text-xs font-mono font-medium text-parchment-100">66 BPM</span>
-                </div>
-                <input id="sliderTempo" type="range" min="40" max="140" value="66" class="w-20 lg:w-24">
+            <!-- Sound Type Selector (Classical Piano by default, always accessible) -->
+            <div class="flex items-center gap-1 shrink-0" title="Choisir le type de son de piano">
+                <svg class="w-3.5 h-3.5 text-amber-400 hidden sm:inline shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+                </svg>
+                <select id="selectSoundTypeHeader" class="bg-studio-850 text-parchment-100 text-[11px] sm:text-xs rounded-lg px-2 py-1 border border-studio-700 focus:outline-none focus:border-amber-500 cursor-pointer">
+                    <option value="classical" selected>🎹 Piano Classique (Grand)</option>
+                    <option value="bright">✨ Piano Concert Cristallin</option>
+                    <option value="felt">🌙 Piano Feutré Intime</option>
+                    <option value="electric">⚡ Piano Électrique Doux</option>
+                    <option value="harpsichord">🏛️ Pianoforte / Clavecin</option>
+                </select>
             </div>
 
-            <div class="h-5 w-px bg-studio-800 mx-0.5 hidden lg:block"></div>
+            <div class="h-4 w-px bg-studio-800 mx-0.5"></div>
+
+            <!-- Tempo Slider (visible on horizontal smartphone too) -->
+            <div class="flex items-center gap-1.5 px-0.5 shrink-0">
+                <span id="valTempo" class="text-[11px] font-mono font-medium text-parchment-100 whitespace-nowrap">66 BPM</span>
+                <input id="sliderTempo" type="range" min="40" max="140" value="66" class="w-14 sm:w-20">
+            </div>
 
             <!-- Scroll / Practice Mode -->
-            <div class="hidden lg:flex items-center gap-1.5">
-                <label for="selectScrollMode" class="text-[10px] uppercase tracking-wider text-studio-400">Mode:</label>
+            <div class="hidden xl:flex items-center gap-1.5 pl-1 border-l border-studio-800">
                 <select id="selectScrollMode" class="bg-studio-850 text-parchment-100 text-xs rounded-lg px-2 py-1 border border-studio-700 focus:outline-none focus:border-amber-500">
                     <option value="continuous">Défilement continu</option>
                     <option value="measure">Par mesure (Saut)</option>
-                    <option value="midi_wait">Attente MIDI / Clavier</option>
+                    <option value="midi_wait">Attente MIDI</option>
                 </select>
             </div>
         </div>
 
-        <!-- Right Controls: Felt Piano Ambiance, Metronome, Layout, MIDI Status -->
-        <div class="flex items-center gap-2">
-            <!-- Felt / Reverb Slider -->
-            <div class="hidden xl:flex items-center gap-2 bg-studio-950/60 px-2.5 py-1 rounded-lg border border-studio-800/80" title="Dosage du feutre et de la réverbération spatiale">
-                <span class="text-[10px] uppercase tracking-wider text-studio-400">Feutre & Reverb</span>
-                <input id="sliderReverb" type="range" min="0" max="100" value="68" class="w-16">
+        <!-- Right Controls: Reverb, Metronome, Layout, Theme, Fullscreen -->
+        <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
+            <!-- Reverb Slider -->
+            <div class="hidden 2xl:flex items-center gap-2 bg-studio-950/60 px-2.5 py-1 rounded-lg border border-studio-800/80" title="Dosage de la réverbération acoustique">
+                <span class="text-[10px] uppercase tracking-wider text-studio-400">Reverb</span>
+                <input id="sliderReverb" type="range" min="0" max="100" value="35" class="w-14">
             </div>
 
             <!-- Metronome Toggle -->
-            <button id="btnMetronome" class="p-2 rounded-lg bg-studio-800 hover:bg-studio-700 text-studio-400 border border-studio-700 transition flex items-center gap-1 text-xs" title="Activer/Désactiver le métronome doux">
+            <button id="btnMetronome" class="p-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-studio-400 border border-studio-700 transition flex items-center gap-1 text-xs" title="Activer/Désactiver le métronome">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3L6 21h12L12 3zm0 6l5 6"/>
                 </svg>
-                <span class="hidden 2xl:inline">Métronome</span>
             </button>
 
             <!-- View Mode Toggle (Horizontal Ribbon vs Page Multi-System) -->
-            <button id="btnViewLayout" class="p-2 rounded-lg bg-studio-800 hover:bg-studio-700 text-parchment-200 border border-studio-700 transition flex items-center gap-1.5 text-xs" title="Basculer entre Ruban Horizontal et Page Multi-Systèmes">
+            <button id="btnViewLayout" class="px-2 py-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-parchment-200 border border-studio-700 transition flex items-center gap-1 text-xs" title="Basculer entre Ruban Horizontal et Page Multi-Systèmes">
                 <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
                 </svg>
-                <span id="labelViewLayout" class="hidden md:inline">Ruban</span>
+                <span id="labelViewLayout" class="hidden sm:inline text-[11px]">Ruban</span>
             </button>
 
             <!-- Sheet Theme Toggle (Parchment vs Dark Nocturne) -->
-            <button id="btnSheetTheme" class="p-2 rounded-lg bg-studio-800 hover:bg-studio-700 text-parchment-200 border border-studio-700 transition text-xs" title="Changer le thème du papier (Parchemin Ivoire / Nocturne Sombre)">
+            <button id="btnSheetTheme" class="p-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-parchment-200 border border-studio-700 transition text-xs" title="Changer le thème du papier (Parchemin Ivoire / Nocturne Sombre)">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
                 </svg>
             </button>
 
-            <!-- MIDI Status Pill -->
-            <div id="midiStatusBadge" class="px-2.5 py-1.5 rounded-lg bg-studio-850 border border-studio-700 flex items-center gap-1.5 text-xs cursor-pointer" title="État de l'entrée Web MIDI (vous pouvez aussi cliquer sur le clavier visuel en bas)">
+            <!-- Fullscreen Toggle (Ideal for Smartphone Horizontal Mode) -->
+            <button id="btnFullscreen" class="p-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-parchment-200 border border-studio-700 transition text-xs" title="Plein écran (idéal sur smartphone en mode horizontal)">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
+                </svg>
+            </button>
+
+            <!-- MIDI Status Pill (compact) -->
+            <div id="midiStatusBadge" class="hidden md:flex px-2 py-1 rounded-lg bg-studio-850 border border-studio-700 items-center gap-1.5 text-xs" title="État de l'entrée Web MIDI">
                 <span id="midiStatusDot" class="w-2 h-2 rounded-full bg-studio-600"></span>
-                <span id="midiStatusText" class="text-[11px] font-mono text-studio-400 hidden sm:inline">MIDI: Simul.</span>
+                <span id="midiStatusText" class="text-[10px] font-mono text-studio-400 hidden xl:inline">MIDI</span>
             </div>
         </div>
     </header>
@@ -236,9 +278,46 @@
     <!-- ==================== MAIN WORKSPACE ==================== -->
     <div class="flex-1 flex overflow-hidden relative">
 
+        <!-- Backdrop for Mobile/Tablet Drawer Overlay -->
+        <div id="drawerBackdrop" class="fixed inset-0 bg-black/50 backdrop-blur-[1px] z-30 hidden lg:hidden"></div>
+
         <!-- LEFT COLLAPSIBLE CONFIGURATION DRAWER ("Scénarios & Paramétrage") -->
-        <aside id="configDrawer" class="w-80 sm:w-96 bg-studio-900/95 backdrop-blur-md border-r border-studio-800 flex flex-col shrink-0 transition-all duration-300 z-20 overflow-y-auto">
-            <div class="p-4 space-y-5">
+        <aside id="configDrawer" class="hidden fixed lg:static inset-y-0 left-0 w-80 sm:w-96 bg-studio-900/95 backdrop-blur-md border-r border-studio-800 flex flex-col shrink-0 transition-all duration-200 z-40 overflow-y-auto shadow-2xl lg:shadow-none">
+            <!-- Sticky Drawer Header for easy closing on mobile landscape -->
+            <div class="sticky top-0 z-10 bg-studio-900/95 backdrop-blur px-4 py-2.5 border-b border-studio-800 flex items-center justify-between">
+                <span class="text-xs font-semibold uppercase tracking-wider text-parchment-100">Paramétrage & Son</span>
+                <button id="btnCloseDrawer" class="p-1 rounded-lg bg-studio-800 hover:bg-studio-700 text-studio-200 text-xs px-2 py-0.5 border border-studio-700">
+                    Fermer ✕
+                </button>
+            </div>
+
+            <div class="p-3.5 sm:p-4 space-y-4">
+
+                <!-- 0. SONORITÉ & TIMBRE DU PIANO -->
+                <section class="space-y-2.5">
+                    <h2 class="text-xs font-semibold uppercase tracking-wider text-amber-400">Sonorité & Timbre du Piano</h2>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[11px] text-studio-400 mb-1">Type de Piano</label>
+                            <select id="selectSoundTypeDrawer" class="w-full bg-studio-850 text-parchment-100 text-xs rounded-lg px-2.5 py-2 border border-studio-700 focus:outline-none focus:border-amber-500">
+                                <option value="classical" selected>🎹 Piano Classique (Queue)</option>
+                                <option value="bright">✨ Piano Concert Cristallin</option>
+                                <option value="felt">🌙 Piano Feutré Intime</option>
+                                <option value="electric">⚡ Piano Électrique Doux</option>
+                                <option value="harpsichord">🏛️ Pianoforte / Clavecin</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] text-studio-400 mb-1">Réverbération Salle</label>
+                            <div class="flex items-center gap-2 bg-studio-850 px-2.5 py-2 rounded-lg border border-studio-700">
+                                <input id="sliderReverbDrawer" type="range" min="0" max="100" value="35" class="w-full">
+                                <span id="valReverbDrawer" class="text-[11px] font-mono text-parchment-200 w-9 text-right">35%</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <hr class="border-studio-800">
 
                 <!-- 1. CONTEMPLATIVE STYLE PRESETS (THEMES) -->
                 <section>
@@ -249,36 +328,36 @@
                         <span class="text-[10px] text-studio-400 font-mono">4 Moteurs</span>
                     </div>
                     <div class="grid grid-cols-2 gap-2">
-                        <button data-preset="gymnopedie" class="preset-btn text-left p-2.5 rounded-xl border border-amber-500/60 bg-amber-500/10 hover:bg-amber-500/15 transition group">
+                        <button data-preset="gymnopedie" class="preset-btn text-left p-2 rounded-xl border border-amber-500/60 bg-amber-500/10 hover:bg-amber-500/15 transition group">
                             <div class="font-serif font-semibold text-sm text-parchment-100 flex items-center justify-between">
                                 <span>Gymnopédie</span>
                                 <span class="text-[10px] font-mono text-amber-300">3/4</span>
                             </div>
-                            <p class="text-[11px] text-studio-400 mt-0.5 leading-snug">Satie • Dorien/Majeur, pompe lente, accords Maj7 & m9.</p>
+                            <p class="text-[10px] text-studio-400 mt-0.5 leading-snug">Satie • Dorien/Majeur, pompe lente, Maj7 & m9.</p>
                         </button>
 
-                        <button data-preset="minecraft" class="preset-btn text-left p-2.5 rounded-xl border border-studio-700 bg-studio-850 hover:bg-studio-800 transition group">
+                        <button data-preset="minecraft" class="preset-btn text-left p-2 rounded-xl border border-studio-700 bg-studio-850 hover:bg-studio-800 transition group">
                             <div class="font-serif font-semibold text-sm text-parchment-100 flex items-center justify-between">
                                 <span>Voxel Ambient</span>
                                 <span class="text-[10px] font-mono text-studio-400">4/4</span>
                             </div>
-                            <p class="text-[11px] text-studio-400 mt-0.5 leading-snug">C418 • Lydien lumineux, add9, sus2, silences respirants.</p>
+                            <p class="text-[10px] text-studio-400 mt-0.5 leading-snug">C418 • Lydien lumineux, add9, sus2, respirations.</p>
                         </button>
 
-                        <button data-preset="skyrim" class="preset-btn text-left p-2.5 rounded-xl border border-studio-700 bg-studio-850 hover:bg-studio-800 transition group">
+                        <button data-preset="skyrim" class="preset-btn text-left p-2 rounded-xl border border-studio-700 bg-studio-850 hover:bg-studio-800 transition group">
                             <div class="font-serif font-semibold text-sm text-parchment-100 flex items-center justify-between">
                                 <span>Nordique & Brume</span>
                                 <span class="text-[10px] font-mono text-studio-400">4/4</span>
                             </div>
-                            <p class="text-[11px] text-studio-400 mt-0.5 leading-snug">Soule • Éolien/Dorien, quintes profondes, chant en tierces.</p>
+                            <p class="text-[10px] text-studio-400 mt-0.5 leading-snug">Soule • Éolien/Dorien, quintes profondes, tierces.</p>
                         </button>
 
-                        <button data-preset="licorice" class="preset-btn text-left p-2.5 rounded-xl border border-studio-700 bg-studio-850 hover:bg-studio-800 transition group">
+                        <button data-preset="licorice" class="preset-btn text-left p-2 rounded-xl border border-studio-700 bg-studio-850 hover:bg-studio-800 transition group">
                             <div class="font-serif font-semibold text-sm text-parchment-100 flex items-center justify-between">
                                 <span>Licorice Néo</span>
                                 <span class="text-[10px] font-mono text-studio-400">4/4</span>
                             </div>
-                            <p class="text-[11px] text-studio-400 mt-0.5 leading-snug">Néoclassique • ii9-V13-Imaj9, emprunt iv mineur, arpèges.</p>
+                            <p class="text-[10px] text-studio-400 mt-0.5 leading-snug">Néoclassique • ii9-V13-Imaj9, emprunt iv mineur.</p>
                         </button>
                     </div>
                 </section>
@@ -286,13 +365,13 @@
                 <hr class="border-studio-800">
 
                 <!-- 2. TONALITÉ, MODE & MODULATION -->
-                <section class="space-y-3">
+                <section class="space-y-2.5">
                     <h2 class="text-xs font-semibold uppercase tracking-wider text-amber-400">2. Tonalité & Mode (Cycle des Quintes)</h2>
 
                     <div class="grid grid-cols-2 gap-2">
                         <div>
                             <label class="block text-[11px] text-studio-400 mb-1">Tonique (Clé)</label>
-                            <select id="selectRootKey" class="w-full bg-studio-850 text-parchment-100 text-xs rounded-lg px-2.5 py-2 border border-studio-700 focus:outline-none focus:border-amber-500">
+                            <select id="selectRootKey" class="w-full bg-studio-850 text-parchment-100 text-xs rounded-lg px-2.5 py-1.5 border border-studio-700 focus:outline-none focus:border-amber-500">
                                 <option value="C">Do (C) — 0 alt.</option>
                                 <option value="G">Sol (G) — 1 ♯</option>
                                 <option value="D" selected>Ré (D) — 2 ♯</option>
@@ -307,7 +386,7 @@
 
                         <div>
                             <label class="block text-[11px] text-studio-400 mb-1">Mode Harmonique</label>
-                            <select id="selectMode" class="w-full bg-studio-850 text-parchment-100 text-xs rounded-lg px-2.5 py-2 border border-studio-700 focus:outline-none focus:border-amber-500">
+                            <select id="selectMode" class="w-full bg-studio-850 text-parchment-100 text-xs rounded-lg px-2.5 py-1.5 border border-studio-700 focus:outline-none focus:border-amber-500">
                                 <option value="major">Majeur (Ionien)</option>
                                 <option value="dorian" selected>Dorien (Contemplatif)</option>
                                 <option value="aeolian">Éolien (Mineur nat.)</option>
@@ -330,12 +409,12 @@
                 <hr class="border-studio-800">
 
                 <!-- 3. RICHESSE HARMONIQUE & PATTERNS -->
-                <section class="space-y-3">
+                <section class="space-y-2.5">
                     <h2 class="text-xs font-semibold uppercase tracking-wider text-amber-400">3. Harmonie & Accompagnement</h2>
 
                     <div>
                         <label class="block text-[11px] text-studio-400 mb-1">Richesse Harmonique</label>
-                        <select id="selectHarmonicRichness" class="w-full bg-studio-850 text-parchment-100 text-xs rounded-lg px-2.5 py-2 border border-studio-700 focus:outline-none focus:border-amber-500">
+                        <select id="selectHarmonicRichness" class="w-full bg-studio-850 text-parchment-100 text-xs rounded-lg px-2.5 py-1.5 border border-studio-700 focus:outline-none focus:border-amber-500">
                             <option value="triads">Triades simples (Lecture fondamentale)</option>
                             <option value="sevenths">Accords de 7ème (Maj7, m7, 7)</option>
                             <option value="extensions" selected>Extensions contemplatives (9e, add9, sus2, 6/9)</option>
@@ -345,8 +424,8 @@
 
                     <div>
                         <label class="block text-[11px] text-studio-400 mb-1">Pattern Main Gauche (Clé de Fa)</label>
-                        <select id="selectLeftHandPattern" class="w-full bg-studio-850 text-parchment-100 text-xs rounded-lg px-2.5 py-2 border border-studio-700 focus:outline-none focus:border-amber-500">
-                            <option value="satie" selected>Pompe Satie (Basse temps 1 + Accord feutré)</option>
+                        <select id="selectLeftHandPattern" class="w-full bg-studio-850 text-parchment-100 text-xs rounded-lg px-2.5 py-1.5 border border-studio-700 focus:outline-none focus:border-amber-500">
+                            <option value="satie" selected>Pompe Satie (Basse temps 1 + Accord)</option>
                             <option value="arpeggio_slow">Arpèges brisés lents (1 - 5 - 8 - 10)</option>
                             <option value="nordic_fifths">Quintes & Octaves ouvertes (Style Nordique)</option>
                             <option value="sustained_voicing">Accords plaqués tenus (Voicings & Guide tones)</option>
@@ -356,7 +435,7 @@
 
                     <div>
                         <label class="block text-[11px] text-studio-400 mb-1">Densité & Difficulté Main Droite (Clé de Sol)</label>
-                        <select id="selectRightHandDensity" class="w-full bg-studio-850 text-parchment-100 text-xs rounded-lg px-2.5 py-2 border border-studio-700 focus:outline-none focus:border-amber-500">
+                        <select id="selectRightHandDensity" class="w-full bg-studio-850 text-parchment-100 text-xs rounded-lg px-2.5 py-1.5 border border-studio-700 focus:outline-none focus:border-amber-500">
                             <option value="1">Niveau 1 : Rondes & Blanches (Lecture calme)</option>
                             <option value="2" selected>Niveau 2 : Noires, liaisons & soupirs (Mélodie lyrique)</option>
                             <option value="3">Niveau 3 : Croches, syncopes & notes d'approche</option>
@@ -368,13 +447,13 @@
                 <hr class="border-studio-800">
 
                 <!-- 4. CONTRAINTES DE DÉCHIFFRAGE -->
-                <section class="space-y-3">
+                <section class="space-y-2.5">
                     <h2 class="text-xs font-semibold uppercase tracking-wider text-amber-400">4. Contraintes de Déchiffrage</h2>
 
                     <div class="grid grid-cols-2 gap-2">
                         <div>
                             <label class="block text-[11px] text-studio-400 mb-1">Signature Rythmique</label>
-                            <select id="selectTimeSig" class="w-full bg-studio-850 text-parchment-100 text-xs rounded-lg px-2.5 py-2 border border-studio-700">
+                            <select id="selectTimeSig" class="w-full bg-studio-850 text-parchment-100 text-xs rounded-lg px-2.5 py-1.5 border border-studio-700">
                                 <option value="3/4" selected>3/4 (Valse lente / Satie)</option>
                                 <option value="4/4">4/4 (Ambient / Standard)</option>
                                 <option value="6/8">6/8 (Binaire composé)</option>
@@ -384,12 +463,21 @@
 
                         <div>
                             <label class="block text-[11px] text-studio-400 mb-1">Amplitude Intervalles</label>
-                            <select id="selectIntervalLeap" class="w-full bg-studio-850 text-parchment-100 text-xs rounded-lg px-2.5 py-2 border border-studio-700">
+                            <select id="selectIntervalLeap" class="w-full bg-studio-850 text-parchment-100 text-xs rounded-lg px-2.5 py-1.5 border border-studio-700">
                                 <option value="stepwise">Conjoint & Tierces max</option>
                                 <option value="moderate" selected>Lyrique (Quintes / Sixtes)</option>
                                 <option value="wide">Grands sauts & Octaves</option>
                             </select>
                         </div>
+                    </div>
+
+                    <div class="flex items-center justify-between p-2 rounded-lg bg-studio-850/70 border border-studio-800">
+                        <span class="text-xs text-parchment-100">Mode de défilement</span>
+                        <select id="selectScrollModeDrawer" class="bg-studio-900 text-parchment-100 text-xs rounded px-2 py-1 border border-studio-700">
+                            <option value="continuous">Défilement continu</option>
+                            <option value="measure">Par mesure (Saut)</option>
+                            <option value="midi_wait">Attente MIDI</option>
+                        </select>
                     </div>
 
                     <label class="flex items-center justify-between p-2 rounded-lg bg-studio-850/70 border border-studio-800 cursor-pointer">
@@ -452,61 +540,42 @@
             </div>
         </aside>
 
-        <!-- ==================== MAIN SCORE VIEWPORT (GRAND STAFF) ==================== -->
+        <!-- ==================== MAIN SCORE VIEWPORT (FULL HEIGHT GRAND STAFF) ==================== -->
         <main class="flex-1 flex flex-col relative overflow-hidden">
 
-            <!-- Floating Score Info Bar -->
-            <div class="h-10 px-4 bg-studio-900/70 border-b border-studio-800/80 flex items-center justify-between text-xs shrink-0 z-10">
-                <div class="flex items-center gap-3">
-                    <span class="font-mono text-studio-400">Mesure <strong id="hudMeasureNum" class="text-parchment-100">1</strong></span>
-                    <span class="text-studio-700">•</span>
-                    <span class="font-mono text-studio-400">Accord actif : <strong id="hudCurrentChord" class="text-amber-400">Dm9</strong></span>
-                    <span class="text-studio-700 hidden sm:inline">•</span>
-                    <span class="font-mono text-studio-400 hidden sm:inline">Degré : <strong id="hudCurrentRoman" class="text-parchment-200">i9</strong></span>
-                </div>
-
-                <!-- Legend & Wait-for-MIDI prompt -->
-                <div class="flex items-center gap-4 text-[11px]">
-                    <div id="midiWaitBanner" class="hidden items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/50 text-amber-300 animate-pulse">
-                        <span>Attente des notes :</span>
-                        <strong id="midiExpectedNotesLabel" class="font-mono">Ré, Fa, La</strong>
-                    </div>
-                    <div class="hidden md:flex items-center gap-3 text-studio-400">
-                        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span> Guide Tone (3ce/7e)</span>
-                        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-sky-500 inline-block"></span> Main Droite</span>
-                        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span> Main Gauche</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Score Canvas Container -->
+            <!-- Score Canvas Container (Takes 100% of remaining viewport height) -->
             <div id="scoreViewportContainer" class="flex-1 relative overflow-y-auto overflow-x-hidden parchment-surface transition-colors duration-300 bg-[#f6f1e7]">
-                <canvas id="scoreCanvas" class="block w-full h-full cursor-pointer"></canvas>
+                
+                <!-- Sleek Floating HUD Overlay (Zero vertical layout space wasted on small smartphones) -->
+                <div id="hudOverlayBar" class="absolute top-2 left-3 right-3 flex items-center justify-between pointer-events-none z-10">
+                    <div class="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-studio-900/80 backdrop-blur-sm border border-studio-700/60 shadow-sm text-[11px]">
+                        <span class="font-mono text-studio-300">Mes. <strong id="hudMeasureNum" class="text-parchment-100">1</strong></span>
+                        <span class="text-studio-600">•</span>
+                        <span class="font-mono text-studio-300"><strong id="hudCurrentChord" class="text-amber-400">Dm9</strong></span>
+                        <span class="text-studio-600">•</span>
+                        <span class="font-mono text-parchment-200" id="hudCurrentRoman">i9</span>
+                    </div>
 
-                <!-- Subtle Hint Overlay at bottom-right of canvas -->
-                <div class="absolute bottom-3 right-4 pointer-events-none flex items-center gap-2 px-3 py-1.5 rounded-lg bg-studio-900/75 text-parchment-200 text-[11px] backdrop-blur-sm border border-studio-700/60 shadow">
-                    <span>Astuce : Cliquez sur un temps de la partition pour l'écouter ou y placer le curseur • Espace = Lecture/Pause</span>
+                    <div class="flex items-center gap-2 text-[11px]">
+                        <div id="midiWaitBanner" class="hidden items-center gap-1.5 px-2.5 py-1 rounded-full bg-studio-900/90 border border-amber-400/60 text-amber-300 shadow">
+                            <span>Attente :</span>
+                            <strong id="midiExpectedNotesLabel" class="font-mono">Ré, Fa, La</strong>
+                        </div>
+                        <div class="hidden md:flex items-center gap-2.5 px-2.5 py-1 rounded-lg bg-studio-900/75 backdrop-blur-sm border border-studio-700/50 text-studio-200">
+                            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-500 inline-block"></span> Guide (3ce/7e)</span>
+                            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-sky-400 inline-block"></span> MD</span>
+                            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span> MG</span>
+                        </div>
+                    </div>
+                </div>
+
+                <canvas id="scoreCanvas" class="block w-full h-full cursor-pointer touch-pan-y"></canvas>
+
+                <!-- Subtle Hint Overlay at bottom-right of canvas (auto-hidden on compact smartphone landscape) -->
+                <div id="hintOverlayBanner" class="absolute bottom-2.5 right-3 pointer-events-none hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-lg bg-studio-900/75 text-parchment-200 text-[10px] backdrop-blur-sm border border-studio-700/60 shadow">
+                    <span>Touchez un temps pour l'écouter • Glissez horizontalement en pause • Espace = Lecture/Pause</span>
                 </div>
             </div>
-
-            <!-- ==================== BOTTOM INTERACTIVE PIANO VISUALIZER ==================== -->
-            <footer class="h-32 sm:h-36 bg-studio-950 border-t border-studio-800 flex flex-col shrink-0 z-20 select-none">
-                <!-- Keyboard Top Trim Bar -->
-                <div class="h-6 px-4 bg-studio-900 border-b border-studio-850 flex items-center justify-between text-[11px] text-studio-400">
-                    <div class="flex items-center gap-2">
-                        <span class="font-mono uppercase tracking-wider text-[10px] text-studio-400">Clavier 88 Touches (A0 – C8)</span>
-                        <span id="activeNotesReadout" class="font-mono text-amber-400"></span>
-                    </div>
-                    <div class="flex items-center gap-3">
-                        <span class="hidden sm:inline text-[10px] text-studio-400">Cliquez ou glissez sur les touches pour jouer le piano feutré (valide aussi le mode Attente MIDI)</span>
-                    </div>
-                </div>
-
-                <!-- 88-Key Piano Canvas / DOM Interactive Strip -->
-                <div class="flex-1 relative w-full overflow-hidden bg-studio-950 px-1 pt-0.5 pb-1">
-                    <canvas id="pianoCanvas" class="w-full h-full block cursor-pointer"></canvas>
-                </div>
-            </footer>
 
         </main>
     </div>
@@ -571,7 +640,7 @@
                 leftHandPattern: 'satie',
                 rightHandDensity: '2',
                 intervalLeap: 'moderate',
-                reverb: 72
+                reverb: 38
             },
             minecraft: {
                 name: 'Voxel Ambient',
@@ -583,7 +652,7 @@
                 leftHandPattern: 'arpeggio_slow',
                 rightHandDensity: '2',
                 intervalLeap: 'moderate',
-                reverb: 84
+                reverb: 48
             },
             skyrim: {
                 name: 'Nordique & Brume',
@@ -595,7 +664,7 @@
                 leftHandPattern: 'nordic_fifths',
                 rightHandDensity: '4',
                 intervalLeap: 'moderate',
-                reverb: 88
+                reverb: 52
             },
             licorice: {
                 name: 'Licorice Néo',
@@ -607,7 +676,7 @@
                 leftHandPattern: 'ostinato_eighths',
                 rightHandDensity: '3',
                 intervalLeap: 'stepwise',
-                reverb: 65
+                reverb: 35
             }
         };
 
@@ -615,14 +684,15 @@
          * 2. APPLICATION STATE
          ***********************************************************************/
         const AppState = {
-            // Playback state
+            // Playback & Sound state
             isPlaying: false,
             tempo: 66,
+            soundType: 'classical',   // 'classical' | 'bright' | 'felt' | 'electric' | 'harpsichord'
             scrollMode: 'continuous', // 'continuous' | 'measure' | 'midi_wait'
             viewLayout: 'ribbon',     // 'ribbon' | 'page'
             sheetTheme: 'parchment',  // 'parchment' | 'dark'
             metronomeEnabled: false,
-            reverbAmount: 0.68,
+            reverbAmount: 0.35,
 
             // Musical parameters
             activePreset: 'gymnopedie',
@@ -655,22 +725,22 @@
             lastVoicingMidis: [50, 57, 60, 64],
             generatedMeasureCounter: 0,
 
-            // Active notes for 88-key visualizer & MIDI Wait mode
-            activeScoreNotes: new Map(), // midi -> { hand: 'lh'|'rh', isGuideTone: bool, expiresAt: number }
-            activeMidiNotes: new Set(),  // Currently depressed MIDI / mouse keys
-            satisfiedSubBeatNotes: new Set() // Notes already matched in MIDI wait mode
+            // Active notes for MIDI Wait mode
+            activeMidiNotes: new Set(),
+            satisfiedSubBeatNotes: new Set()
         };
 
         /***********************************************************************
-         * 3. WEB AUDIO API — FELT PIANO SYNTHESIZER & REVERB ENGINE
+         * 3. WEB AUDIO API — MULTI-TIMBRE PIANO SYNTHESIZER (CLASSICAL GRAND DEFAULT)
          ***********************************************************************/
-        class FeltPianoEngine {
+        class PianoAudioEngine {
             constructor() {
                 this.ctx = null;
                 this.masterGain = null;
                 this.dryGain = null;
                 this.wetGain = null;
                 this.convolver = null;
+                this.noiseBuffer = null;
                 this.isInitialized = false;
             }
 
@@ -686,22 +756,25 @@
                 this.ctx = new AudioCtx();
 
                 this.masterGain = this.ctx.createGain();
-                this.masterGain.gain.value = 0.85;
+                this.masterGain.gain.value = 0.88;
 
-                // Create stereo compressor to prevent clipping on rich 9th chords
+                // Stereo compressor to prevent clipping on rich chords while preserving dynamic range
                 this.compressor = this.ctx.createDynamicsCompressor();
-                this.compressor.threshold.setValueAtTime(-18, this.ctx.currentTime);
-                this.compressor.knee.setValueAtTime(12, this.ctx.currentTime);
-                this.compressor.ratio.setValueAtTime(4, this.ctx.currentTime);
-                this.compressor.attack.setValueAtTime(0.005, this.ctx.currentTime);
-                this.compressor.release.setValueAtTime(0.25, this.ctx.currentTime);
+                this.compressor.threshold.setValueAtTime(-16, this.ctx.currentTime);
+                this.compressor.knee.setValueAtTime(10, this.ctx.currentTime);
+                this.compressor.ratio.setValueAtTime(3.5, this.ctx.currentTime);
+                this.compressor.attack.setValueAtTime(0.003, this.ctx.currentTime);
+                this.compressor.release.setValueAtTime(0.22, this.ctx.currentTime);
 
                 this.dryGain = this.ctx.createGain();
                 this.wetGain = this.ctx.createGain();
 
-                // Build lush synthetic algorithmic impulse response for contemplative hall reverb
+                // Build realistic concert hall impulse response
                 this.convolver = this.ctx.createConvolver();
-                this.convolver.buffer = this.createFeltReverbImpulse(3.6, 2.4);
+                this.convolver.buffer = this.createConcertHallImpulse(2.8, 2.6);
+
+                // Short noise buffer for realistic piano hammer strike transients
+                this.noiseBuffer = this.createHammerNoiseBuffer();
 
                 this.masterGain.connect(this.dryGain);
                 this.masterGain.connect(this.convolver);
@@ -715,8 +788,20 @@
                 this.isInitialized = true;
             }
 
-            // Generate warm stereo exponential decay impulse buffer with low-pass damping
-            createFeltReverbImpulse(durationSeconds, decayRate) {
+            createHammerNoiseBuffer() {
+                const sr = this.ctx.sampleRate;
+                const len = Math.floor(sr * 0.04);
+                const buf = this.ctx.createBuffer(1, len, sr);
+                const data = buf.getChannelData(0);
+                for (let i = 0; i < len; i++) {
+                    const env = Math.pow(1 - i / len, 2.2);
+                    data[i] = (Math.random() * 2 - 1) * env;
+                }
+                return buf;
+            }
+
+            // Generate stereo exponential decay impulse buffer for natural acoustic hall
+            createConcertHallImpulse(durationSeconds, decayRate) {
                 const sampleRate = this.ctx.sampleRate;
                 const length = Math.floor(sampleRate * durationSeconds);
                 const impulse = this.ctx.createBuffer(2, length, sampleRate);
@@ -727,10 +812,9 @@
                     for (let i = 0; i < length; i++) {
                         const t = i / length;
                         const env = Math.pow(1 - t, decayRate);
-                        // Filtered white noise for warm wooden hall tail
                         const white = (Math.random() * 2 - 1);
-                        lastSample = lastSample * 0.82 + white * 0.18;
-                        data[i] = lastSample * env * 0.65;
+                        lastSample = lastSample * 0.72 + white * 0.28;
+                        data[i] = lastSample * env * 0.6;
                     }
                 }
                 return impulse;
@@ -740,94 +824,297 @@
                 AppState.reverbAmount = normValue;
                 if (!this.isInitialized) return;
                 const now = this.ctx.currentTime;
-                this.dryGain.gain.setTargetAtTime(0.85 - normValue * 0.25, now, 0.05);
-                this.wetGain.gain.setTargetAtTime(normValue * 0.95, now, 0.05);
+                this.dryGain.gain.setTargetAtTime(0.92 - normValue * 0.22, now, 0.05);
+                this.wetGain.gain.setTargetAtTime(normValue * 0.85, now, 0.05);
             }
 
-            // Trigger a warm felt-piano note with hammer transient and detuned harmonics
-            playNote(midi, durationSec = 1.5, velocity = 0.65) {
+            // Dispatch note synthesis according to selected Sound Type
+            playNote(midi, durationSec = 1.5, velocity = 0.68) {
                 this.init();
+                const type = AppState.soundType || 'classical';
+                if (type === 'classical') {
+                    this.playClassicalGrandNote(midi, durationSec, velocity, false);
+                } else if (type === 'bright') {
+                    this.playClassicalGrandNote(midi, durationSec, velocity, true);
+                } else if (type === 'felt') {
+                    this.playFeltPianoNote(midi, durationSec, velocity);
+                } else if (type === 'electric') {
+                    this.playElectricPianoNote(midi, durationSec, velocity);
+                } else if (type === 'harpsichord') {
+                    this.playHarpsichordNote(midi, durationSec, velocity);
+                }
+            }
+
+            // 1 & 2. Classical Concert Grand Piano & Bright Studio Grand synthesis
+            playClassicalGrandNote(midi, durationSec, velocity, isBright = false) {
                 const now = this.ctx.currentTime;
                 const freq = 440 * Math.pow(2, (midi - 69) / 12);
 
-                // Register compensation so bass isn't muddy and treble is delicate
-                const registerScale = midi < 48 ? 0.85 : (midi > 76 ? 0.65 : 0.78);
-                const amp = Math.min(1, Math.max(0.1, velocity)) * registerScale * 0.28;
+                // Register balance across 88 keys
+                const registerScale = midi < 48 ? 0.9 : (midi > 76 ? 0.72 : 0.82);
+                const amp = Math.min(1, Math.max(0.12, velocity)) * registerScale * 0.30;
 
-                // Voice output envelope
+                // Acoustic piano string inharmonicity coefficient B (higher in treble/bass extremes)
+                const B = midi < 45 ? 0.00012 : (midi > 72 ? 0.00035 : 0.00018);
+                const f2 = freq * 2 * Math.sqrt(1 + B * 4);
+                const f3 = freq * 3 * Math.sqrt(1 + B * 9);
+
+                // Two-stage acoustic grand piano envelope (crisp hammer strike -> singing soundboard sustain)
                 const voiceGain = this.ctx.createGain();
-                voiceGain.gain.setValueAtTime(0.0001, now);
-                // Soft felt attack (14ms)
-                voiceGain.gain.linearRampToValueAtTime(amp, now + 0.014);
-                // Natural piano string initial decay into sustain
-                const releaseTime = Math.max(0.6, durationSec * 1.35);
-                voiceGain.gain.exponentialRampToValueAtTime(amp * 0.32, now + 0.35);
-                voiceGain.gain.exponentialRampToValueAtTime(0.0001, now + releaseTime + 0.4);
+                const attackTime = isBright ? 0.003 : 0.005;
+                const releaseTime = Math.max(0.85, durationSec * 1.55);
 
-                // Warm low-pass filter controlled by felt setting & velocity
+                voiceGain.gain.setValueAtTime(0.0001, now);
+                voiceGain.gain.linearRampToValueAtTime(amp, now + attackTime);
+                voiceGain.gain.exponentialRampToValueAtTime(amp * 0.52, now + 0.22);
+                voiceGain.gain.exponentialRampToValueAtTime(0.0001, now + releaseTime + 0.45);
+
+                // Dynamic velocity-sensitive lowpass filter (opens on hammer impact, mellows on sustain)
                 const filter = this.ctx.createBiquadFilter();
                 filter.type = 'lowpass';
-                const feltDamping = 1.0 - (AppState.reverbAmount * 0.35);
-                const baseCutoff = Math.min(6000, freq * (3.2 + velocity * 3.5) * feltDamping);
-                filter.frequency.setValueAtTime(baseCutoff * 1.5, now);
-                filter.frequency.exponentialRampToValueAtTime(Math.max(240, baseCutoff * 0.55), now + releaseTime * 0.8);
-                filter.Q.value = 0.7;
+                const brightMult = isBright ? 1.45 : 1.0;
+                const attackCutoff = Math.min(14000, freq * (8.5 + velocity * 6.5) * brightMult);
+                const sustainCutoff = Math.min(6500, Math.max(380, freq * (3.6 + velocity * 1.8) * brightMult));
+                const endCutoff = Math.max(260, freq * 1.6);
 
-                // Oscillator 1: Warm Triangle fundamental
+                filter.frequency.setValueAtTime(attackCutoff, now);
+                filter.frequency.exponentialRampToValueAtTime(sustainCutoff, now + 0.16);
+                filter.frequency.exponentialRampToValueAtTime(endCutoff, now + releaseTime);
+                filter.Q.value = isBright ? 1.1 : 0.85;
+
+                // Unison string 1: Warm Triangle core
                 const osc1 = this.ctx.createOscillator();
                 osc1.type = 'triangle';
                 osc1.frequency.setValueAtTime(freq, now);
 
-                // Oscillator 2: Pure Sine slightly detuned (unison string)
+                // Unison string 2: Slightly detuned Sawtooth for rich acoustic piano even/odd harmonics
+                const osc2 = this.ctx.createOscillator();
+                osc2.type = 'sawtooth';
+                osc2.frequency.setValueAtTime(freq, now);
+                osc2.detune.setValueAtTime(1.8, now);
+                const osc2Gain = this.ctx.createGain();
+                osc2Gain.gain.setValueAtTime(isBright ? 0.34 : 0.24, now);
+                osc2Gain.gain.exponentialRampToValueAtTime(0.06, now + releaseTime * 0.7);
+
+                // Harmonic 2 (Octave partial with inharmonicity & slight flat detune)
+                const osc3 = this.ctx.createOscillator();
+                osc3.type = 'sine';
+                osc3.frequency.setValueAtTime(f2, now);
+                osc3.detune.setValueAtTime(-1.5, now);
+                const osc3Gain = this.ctx.createGain();
+                osc3Gain.gain.setValueAtTime(0.24, now);
+                osc3Gain.gain.exponentialRampToValueAtTime(0.002, now + releaseTime * 0.65);
+
+                // Harmonic 3 (Twelfth partial for classical woody ring)
+                const osc4 = this.ctx.createOscillator();
+                osc4.type = 'sine';
+                osc4.frequency.setValueAtTime(f3, now);
+                const osc4Gain = this.ctx.createGain();
+                osc4Gain.gain.setValueAtTime(isBright ? 0.14 : 0.09, now);
+                osc4Gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+
+                // Crisp acoustic hammer key-strike transient
+                this.triggerClassicalHammerStrike(now, freq, amp * (isBright ? 0.38 : 0.26));
+
+                osc1.connect(filter);
+                osc2.connect(osc2Gain);
+                osc2Gain.connect(filter);
+                osc3.connect(osc3Gain);
+                osc3Gain.connect(filter);
+                osc4.connect(osc4Gain);
+                osc4Gain.connect(filter);
+
+                filter.connect(voiceGain);
+                voiceGain.connect(this.masterGain);
+
+                const stopAt = now + releaseTime + 0.5;
+                osc1.start(now);
+                osc2.start(now);
+                osc3.start(now);
+                osc4.start(now);
+                osc1.stop(stopAt);
+                osc2.stop(stopAt);
+                osc3.stop(stopAt);
+                osc4.stop(stopAt);
+            }
+
+            // Realistic acoustic hammer impact (filtered noise burst + soundboard woody ping)
+            triggerClassicalHammerStrike(now, freq, level) {
+                if (this.noiseBuffer) {
+                    const noise = this.ctx.createBufferSource();
+                    noise.buffer = this.noiseBuffer;
+                    const bp = this.ctx.createBiquadFilter();
+                    bp.type = 'bandpass';
+                    bp.frequency.setValueAtTime(Math.min(4800, Math.max(600, freq * 2.8)), now);
+                    bp.Q.value = 1.8;
+                    const ng = this.ctx.createGain();
+                    ng.gain.setValueAtTime(level * 0.7, now);
+                    ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.025);
+                    noise.connect(bp);
+                    bp.connect(ng);
+                    ng.connect(this.masterGain);
+                    noise.start(now);
+                }
+
+                // Soundboard bridge thump
+                const osc = this.ctx.createOscillator();
+                const g = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(155, now);
+                osc.frequency.exponentialRampToValueAtTime(48, now + 0.028);
+                g.gain.setValueAtTime(level * 0.55, now);
+                g.gain.exponentialRampToValueAtTime(0.0001, now + 0.032);
+                osc.connect(g);
+                g.connect(this.masterGain);
+                osc.start(now);
+                osc.stop(now + 0.036);
+            }
+
+            // 3. Intimate Felt Piano synthesis
+            playFeltPianoNote(midi, durationSec, velocity) {
+                const now = this.ctx.currentTime;
+                const freq = 440 * Math.pow(2, (midi - 69) / 12);
+                const registerScale = midi < 48 ? 0.85 : (midi > 76 ? 0.65 : 0.78);
+                const amp = Math.min(1, Math.max(0.1, velocity)) * registerScale * 0.28;
+
+                const voiceGain = this.ctx.createGain();
+                voiceGain.gain.setValueAtTime(0.0001, now);
+                voiceGain.gain.linearRampToValueAtTime(amp, now + 0.014);
+                const releaseTime = Math.max(0.6, durationSec * 1.35);
+                voiceGain.gain.exponentialRampToValueAtTime(amp * 0.32, now + 0.35);
+                voiceGain.gain.exponentialRampToValueAtTime(0.0001, now + releaseTime + 0.4);
+
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                const baseCutoff = Math.min(4200, freq * (2.6 + velocity * 2.5));
+                filter.frequency.setValueAtTime(baseCutoff * 1.3, now);
+                filter.frequency.exponentialRampToValueAtTime(Math.max(220, baseCutoff * 0.5), now + releaseTime * 0.8);
+                filter.Q.value = 0.7;
+
+                const osc1 = this.ctx.createOscillator();
+                osc1.type = 'triangle';
+                osc1.frequency.setValueAtTime(freq, now);
+
                 const osc2 = this.ctx.createOscillator();
                 osc2.type = 'sine';
                 osc2.frequency.setValueAtTime(freq, now);
-                osc2.detune.setValueAtTime(3.5, now); // +3.5 cents warm chorus
+                osc2.detune.setValueAtTime(3.5, now);
 
-                // Oscillator 3: Soft 2nd harmonic for body
                 const osc3 = this.ctx.createOscillator();
                 osc3.type = 'sine';
                 osc3.frequency.setValueAtTime(freq * 2, now);
                 const osc3Gain = this.ctx.createGain();
-                osc3Gain.gain.setValueAtTime(0.12, now);
-                osc3Gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+                osc3Gain.gain.setValueAtTime(0.10, now);
+                osc3Gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
 
-                // Subtle felt hammer thump (low-passed burst)
-                this.triggerFeltHammerTransient(now, amp * 0.25);
+                this.triggerClassicalHammerStrike(now, freq * 0.5, amp * 0.18);
 
                 osc1.connect(filter);
                 osc2.connect(filter);
                 osc3.connect(osc3Gain);
                 osc3Gain.connect(filter);
-
                 filter.connect(voiceGain);
                 voiceGain.connect(this.masterGain);
 
+                const stopAt = now + releaseTime + 0.45;
                 osc1.start(now);
                 osc2.start(now);
                 osc3.start(now);
-
-                const stopAt = now + releaseTime + 0.45;
                 osc1.stop(stopAt);
                 osc2.stop(stopAt);
                 osc3.stop(stopAt);
             }
 
-            // Soft mechanical felt hammer thud
-            triggerFeltHammerTransient(now, gainAmount) {
-                const osc = this.ctx.createOscillator();
-                const g = this.ctx.createGain();
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(115, now);
-                osc.frequency.exponentialRampToValueAtTime(38, now + 0.035);
+            // 4. Warm Electric Piano (Rhodes Tine & Tonebar style)
+            playElectricPianoNote(midi, durationSec, velocity) {
+                const now = this.ctx.currentTime;
+                const freq = 440 * Math.pow(2, (midi - 69) / 12);
+                const amp = Math.min(1, Math.max(0.1, velocity)) * 0.24;
+                const releaseTime = Math.max(0.8, durationSec * 1.4);
 
-                g.gain.setValueAtTime(gainAmount, now);
-                g.gain.exponentialRampToValueAtTime(0.0001, now + 0.04);
+                const voiceGain = this.ctx.createGain();
+                voiceGain.gain.setValueAtTime(0.0001, now);
+                voiceGain.gain.linearRampToValueAtTime(amp, now + 0.006);
+                voiceGain.gain.exponentialRampToValueAtTime(amp * 0.45, now + 0.28);
+                voiceGain.gain.exponentialRampToValueAtTime(0.0001, now + releaseTime + 0.3);
 
-                osc.connect(g);
-                g.connect(this.masterGain);
-                osc.start(now);
-                osc.stop(now + 0.045);
+                const osc1 = this.ctx.createOscillator();
+                osc1.type = 'sine';
+                osc1.frequency.setValueAtTime(freq, now);
+
+                const osc2 = this.ctx.createOscillator();
+                osc2.type = 'triangle';
+                osc2.frequency.setValueAtTime(freq, now);
+                osc2.detune.setValueAtTime(2.5, now);
+                const osc2Gain = this.ctx.createGain();
+                osc2Gain.gain.setValueAtTime(0.35, now);
+
+                // Rhodes metallic tine overtone chime on attack
+                const tineOsc = this.ctx.createOscillator();
+                tineOsc.type = 'sine';
+                tineOsc.frequency.setValueAtTime(freq * 4, now);
+                const tineGain = this.ctx.createGain();
+                tineGain.gain.setValueAtTime(0.18 * velocity, now);
+                tineGain.gain.exponentialRampToValueAtTime(0.0005, now + 0.18);
+
+                osc1.connect(voiceGain);
+                osc2.connect(osc2Gain);
+                osc2Gain.connect(voiceGain);
+                tineOsc.connect(tineGain);
+                tineGain.connect(voiceGain);
+                voiceGain.connect(this.masterGain);
+
+                const stopAt = now + releaseTime + 0.35;
+                osc1.start(now);
+                osc2.start(now);
+                tineOsc.start(now);
+                osc1.stop(stopAt);
+                osc2.stop(stopAt);
+                tineOsc.stop(stopAt);
+            }
+
+            // 5. Classical Pianoforte / Harpsichord Plucked Synthesis
+            playHarpsichordNote(midi, durationSec, velocity) {
+                const now = this.ctx.currentTime;
+                const freq = 440 * Math.pow(2, (midi - 69) / 12);
+                const amp = Math.min(1, Math.max(0.12, velocity)) * 0.20;
+                const releaseTime = Math.max(0.55, Math.min(1.6, durationSec * 1.1));
+
+                const voiceGain = this.ctx.createGain();
+                voiceGain.gain.setValueAtTime(0.0001, now);
+                voiceGain.gain.linearRampToValueAtTime(amp, now + 0.0025);
+                voiceGain.gain.exponentialRampToValueAtTime(amp * 0.28, now + 0.16);
+                voiceGain.gain.exponentialRampToValueAtTime(0.0001, now + releaseTime);
+
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(Math.min(12000, freq * 12), now);
+                filter.frequency.exponentialRampToValueAtTime(Math.max(800, freq * 3.5), now + releaseTime);
+                filter.Q.value = 1.4;
+
+                const osc1 = this.ctx.createOscillator();
+                osc1.type = 'sawtooth';
+                osc1.frequency.setValueAtTime(freq, now);
+
+                const osc2 = this.ctx.createOscillator();
+                osc2.type = 'triangle';
+                osc2.frequency.setValueAtTime(freq * 2, now);
+                osc2.detune.setValueAtTime(1.5, now);
+                const osc2Gain = this.ctx.createGain();
+                osc2Gain.gain.setValueAtTime(0.28, now);
+                osc2Gain.gain.exponentialRampToValueAtTime(0.01, now + releaseTime * 0.7);
+
+                osc1.connect(filter);
+                osc2.connect(osc2Gain);
+                osc2Gain.connect(filter);
+                filter.connect(voiceGain);
+                voiceGain.connect(this.masterGain);
+
+                const stopAt = now + releaseTime + 0.05;
+                osc1.start(now);
+                osc2.start(now);
+                osc1.stop(stopAt);
+                osc2.stop(stopAt);
             }
 
             // Wooden soft metronome click
@@ -837,10 +1124,10 @@
                 const osc = this.ctx.createOscillator();
                 const g = this.ctx.createGain();
                 osc.type = 'triangle';
-                osc.frequency.setValueAtTime(isDownbeat ? 720 : 480, now);
+                osc.frequency.setValueAtTime(isDownbeat ? 760 : 500, now);
                 osc.frequency.exponentialRampToValueAtTime(180, now + 0.03);
 
-                g.gain.setValueAtTime(isDownbeat ? 0.14 : 0.08, now);
+                g.gain.setValueAtTime(isDownbeat ? 0.15 : 0.09, now);
                 g.gain.exponentialRampToValueAtTime(0.0001, now + 0.035);
 
                 osc.connect(g);
@@ -850,7 +1137,7 @@
             }
         }
 
-        const audioEngine = new FeltPianoEngine();
+        const audioEngine = new PianoAudioEngine();
 
         /***********************************************************************
          * 4. PROCEDURAL MUSIC THEORY & VOICE-LEADING GENERATOR
@@ -1385,7 +1672,6 @@
             updateHeaderSummary();
             updateHudInfo();
             renderScore();
-            renderPianoKeyboard();
         }
 
         // Ensure infinite lookahead buffer always has at least 10 measures ahead of playhead
@@ -1408,6 +1694,7 @@
 
         /***********************************************************************
          * 5. HIGH-DPI GRAND STAFF NOTATION RENDERER (CANVAS)
+         * Optimized for both Desktop and Small Smartphone Horizontal Mode
          ***********************************************************************/
         const scoreCanvas = document.getElementById('scoreCanvas');
         const scoreCtx = scoreCanvas.getContext('2d');
@@ -1456,7 +1743,6 @@
         }
 
         // Convert diatonic step from C4 to vertical Y coordinate on Treble or Bass staff
-        // Staff line spacing = `lineGap` (distance between two adjacent lines); each diatonic step = lineGap / 2
         function stepToStaffY(stepFromC4, isTreble, staffTopY, lineGap) {
             const halfGap = lineGap / 2;
             if (isTreble) {
@@ -1470,7 +1756,7 @@
             }
         }
 
-        // Store hit-boxes of rendered beats so clicking on the score jumps/auditions that beat
+        // Store hit-boxes of rendered beats so clicking/tapping on the score jumps/auditions that beat
         let renderedBeatHitboxes = [];
 
         function renderScore() {
@@ -1524,11 +1810,12 @@
                 renderHorizontalRibbon(scoreCtx, width, height, palette);
                 scoreCtx.restore();
             } else {
-                // Multi-system page view
-                const measuresPerRow = width < 700 ? 2 : (width < 1100 ? 3 : 4);
+                // Multi-system page view (responsive for smartphone landscape and desktop)
+                const isCompact = container.clientHeight < 420 || width < 760;
+                const measuresPerRow = width < 640 ? 2 : (width < 1050 ? 3 : 4);
                 const totalRows = Math.ceil(AppState.measures.length / measuresPerRow);
-                const rowHeight = 250;
-                const totalHeight = Math.max(container.clientHeight, totalRows * rowHeight + 80);
+                const rowHeight = isCompact ? 190 : 245;
+                const totalHeight = Math.max(container.clientHeight, totalRows * rowHeight + 60);
 
                 scoreCanvas.width = width * dpr;
                 scoreCanvas.height = totalHeight * dpr;
@@ -1538,13 +1825,13 @@
                 scoreCtx.scale(dpr, dpr);
                 scoreCtx.clearRect(0, 0, width, totalHeight);
 
-                renderPageSystems(scoreCtx, width, totalHeight, measuresPerRow, rowHeight, palette);
+                renderPageSystems(scoreCtx, width, totalHeight, measuresPerRow, rowHeight, palette, isCompact);
                 scoreCtx.restore();
             }
         }
 
         // Draw authentic Grand Staff Brace, Treble Clef, Bass Clef, Key Signature, and Time Signature
-        function drawSystemHeader(ctx, x, trebleTopY, bassTopY, lineGap, rootKey, timeSig, palette) {
+        function drawSystemHeader(ctx, x, trebleTopY, bassTopY, lineGap, rootKey, timeSig, palette, isCompact = false) {
             const staffHeight = lineGap * 4;
             const totalGrandHeight = (bassTopY + staffHeight) - trebleTopY;
 
@@ -1553,33 +1840,34 @@
             ctx.fillStyle = palette.ink;
 
             // Left vertical system barline connecting Treble and Bass
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 1.8;
             ctx.beginPath();
             ctx.moveTo(x, trebleTopY);
             ctx.lineTo(x, bassTopY + staffHeight);
             ctx.stroke();
 
             // Curly Grand Staff Brace
-            const braceX = x - 8;
+            const braceX = x - (isCompact ? 6 : 8);
             const midY = trebleTopY + totalGrandHeight / 2;
-            ctx.lineWidth = 2.2;
+            ctx.lineWidth = isCompact ? 1.8 : 2.2;
             ctx.beginPath();
-            ctx.moveTo(braceX + 4, trebleTopY);
-            ctx.bezierCurveTo(braceX - 8, trebleTopY + totalGrandHeight * 0.15, braceX + 2, midY - 12, braceX - 7, midY);
-            ctx.bezierCurveTo(braceX + 2, midY + 12, braceX - 8, bassTopY + staffHeight - totalGrandHeight * 0.15, braceX + 4, bassTopY + staffHeight);
+            ctx.moveTo(braceX + 3, trebleTopY);
+            ctx.bezierCurveTo(braceX - 6, trebleTopY + totalGrandHeight * 0.15, braceX + 2, midY - 10, braceX - 5, midY);
+            ctx.bezierCurveTo(braceX + 2, midY + 10, braceX - 6, bassTopY + staffHeight - totalGrandHeight * 0.15, braceX + 3, bassTopY + staffHeight);
             ctx.stroke();
 
             // Treble Clef (𝄞) & Bass Clef (𝄢) using crisp serif glyphs
-            ctx.font = `${Math.round(lineGap * 4.8)}px "Cormorant Garamond", serif`;
-            ctx.fillText('𝄞', x + 8, trebleTopY + lineGap * 3.55);
+            ctx.font = `${Math.round(lineGap * 4.7)}px "Cormorant Garamond", serif`;
+            ctx.fillText('𝄞', x + (isCompact ? 5 : 8), trebleTopY + lineGap * 3.55);
 
-            ctx.font = `${Math.round(lineGap * 3.8)}px "Cormorant Garamond", serif`;
-            ctx.fillText('𝄢', x + 9, bassTopY + lineGap * 2.95);
+            ctx.font = `${Math.round(lineGap * 3.7)}px "Cormorant Garamond", serif`;
+            ctx.fillText('𝄢', x + (isCompact ? 6 : 9), bassTopY + lineGap * 2.95);
 
             // Key Signature accidentals
-            let cursorX = x + 44;
+            let cursorX = x + (isCompact ? 34 : 44);
+            const accStepX = isCompact ? 9 : 11;
             const keyInfo = KEY_SIGNATURES[rootKey] || KEY_SIGNATURES['C'];
-            ctx.font = `600 ${Math.round(lineGap * 1.9)}px "Cormorant Garamond", serif`;
+            ctx.font = `600 ${Math.round(lineGap * 1.85)}px "Cormorant Garamond", serif`;
 
             // Sharp positions (step from C4) on Treble: F5(10), C5(7), G5(11), D5(8)
             const trebleSharpSteps = [10, 7, 11, 8];
@@ -1594,7 +1882,7 @@
                     const by = stepToStaffY(bassSharpSteps[i], false, bassTopY, lineGap);
                     ctx.fillText('♯', cursorX, ty + lineGap * 0.55);
                     ctx.fillText('♯', cursorX, by + lineGap * 0.55);
-                    cursorX += 11;
+                    cursorX += accStepX;
                 }
             } else if (keyInfo.flats > 0) {
                 for (let i = 0; i < keyInfo.flats; i++) {
@@ -1602,22 +1890,22 @@
                     const by = stepToStaffY(bassFlatSteps[i], false, bassTopY, lineGap);
                     ctx.fillText('♭', cursorX, ty + lineGap * 0.55);
                     ctx.fillText('♭', cursorX, by + lineGap * 0.55);
-                    cursorX += 11;
+                    cursorX += accStepX;
                 }
             }
 
             // Time Signature numerals
-            cursorX += 8;
+            cursorX += isCompact ? 5 : 8;
             const [num, den] = timeSig.split('/');
-            ctx.font = `700 ${Math.round(lineGap * 2.35)}px "Cormorant Garamond", serif`;
+            ctx.font = `700 ${Math.round(lineGap * 2.3)}px "Cormorant Garamond", serif`;
             ctx.textAlign = 'center';
-            ctx.fillText(num, cursorX + 8, trebleTopY + lineGap * 1.85);
-            ctx.fillText(den, cursorX + 8, trebleTopY + lineGap * 3.85);
-            ctx.fillText(num, cursorX + 8, bassTopY + lineGap * 1.85);
-            ctx.fillText(den, cursorX + 8, bassTopY + lineGap * 3.85);
+            ctx.fillText(num, cursorX + 7, trebleTopY + lineGap * 1.85);
+            ctx.fillText(den, cursorX + 7, trebleTopY + lineGap * 3.85);
+            ctx.fillText(num, cursorX + 7, bassTopY + lineGap * 1.85);
+            ctx.fillText(den, cursorX + 7, bassTopY + lineGap * 3.85);
 
             ctx.restore();
-            return cursorX + 26;
+            return cursorX + (isCompact ? 20 : 26);
         }
 
         // Draw the 5 horizontal staff lines for Treble and Bass
@@ -1643,19 +1931,34 @@
             ctx.restore();
         }
 
-        // Render Horizontal Infinite Ribbon mode
+        // Render Horizontal Infinite Ribbon mode (Adaptive for Smartphone Landscape & Desktop)
         function renderHorizontalRibbon(ctx, width, height, palette) {
-            const lineGap = Math.max(10, Math.min(13, Math.floor(height / 24)));
-            const centerY = height * 0.5;
-            const trebleTopY = Math.round(centerY - lineGap * 6.8);
-            const bassTopY = Math.round(centerY + lineGap * 2.8);
+            const isCompactHeight = height < 390;
+            const isSmallWidth = width < 780;
+            const isCompact = isCompactHeight || isSmallWidth;
 
-            const leftMargin = 28;
+            // Reserve space for floating HUD at top and Roman numerals at bottom
+            const topReserve = isCompactHeight ? 42 : 56;
+            const bottomReserve = isCompactHeight ? 24 : 40;
+            const availHeight = Math.max(120, height - topReserve - bottomReserve);
+
+            // Total vertical span in lineGap units: Treble (4) + Middle Gap (4.5 or 5.2) + Bass (4)
+            const bassOffsetGaps = isCompactHeight ? 8.3 : 9.2;
+            const totalGaps = bassOffsetGaps + 4;
+            const maxGap = isCompactHeight ? 11.8 : 13.8;
+            const lineGap = Math.max(7.5, Math.min(maxGap, availHeight / (totalGaps + 1.8)));
+
+            const grandStaffHeight = lineGap * totalGaps;
+            const trebleTopY = Math.round(topReserve + (availHeight - grandStaffHeight) * 0.52);
+            const bassTopY = Math.round(trebleTopY + lineGap * bassOffsetGaps);
+
+            const leftMargin = isCompact ? 14 : 28;
+            const rightMargin = isCompact ? 8 : 16;
             const currentMeas = AppState.measures[AppState.currentMeasureIndex] || AppState.measures[0];
             if (!currentMeas) return;
 
             // Draw full-width staff lines
-            drawGrandStaffLines(ctx, leftMargin, width - 16, trebleTopY, bassTopY, lineGap, palette);
+            drawGrandStaffLines(ctx, leftMargin, width - rightMargin, trebleTopY, bassTopY, lineGap, palette);
 
             // Draw fixed system header on the left
             const headerEndX = drawSystemHeader(
@@ -1666,17 +1969,21 @@
                 lineGap,
                 currentMeas.rootKey,
                 currentMeas.timeSig,
-                palette
+                palette,
+                isCompact
             );
 
             // Playhead fixed anchor X in Continuous mode, or sliding in Measure mode
-            const playheadAnchorX = headerEndX + 85;
-            const measureWidth = Math.max(240, Math.min(340, width * 0.32));
+            const playheadAnchorX = headerEndX + (isCompact ? 42 : 82);
+            const remainingW = Math.max(200, width - headerEndX - rightMargin);
+            const measureWidth = isCompact
+                ? Math.max(175, Math.min(245, remainingW * 0.42))
+                : Math.max(240, Math.min(340, width * 0.32));
 
             // Clip measure scrolling region to the right of the header
             ctx.save();
             ctx.beginPath();
-            ctx.rect(headerEndX, 0, width - headerEndX - 10, height);
+            ctx.rect(headerEndX, 0, width - headerEndX - rightMargin, height);
             ctx.clip();
 
             // Calculate smooth horizontal scroll offset
@@ -1687,7 +1994,7 @@
 
             // Render visible window of measures
             const startMeasIdx = Math.max(0, AppState.currentMeasureIndex - 1);
-            const endMeasIdx = Math.min(AppState.measures.length - 1, AppState.currentMeasureIndex + 5);
+            const endMeasIdx = Math.min(AppState.measures.length - 1, AppState.currentMeasureIndex + 6);
 
             for (let mIdx = startMeasIdx; mIdx <= endMeasIdx; mIdx++) {
                 const measure = AppState.measures[mIdx];
@@ -1697,38 +2004,45 @@
                 if (mIdx === AppState.currentMeasureIndex) {
                     const beatOffset = (AppState.currentBeatFloat / measure.beatsPerMeasure) * measureWidth;
                     const cursorX = AppState.scrollMode === 'measure' ? (measX + beatOffset) : playheadAnchorX;
+                    const cursorPadY = isCompactHeight ? 22 : 34;
 
                     ctx.save();
                     ctx.fillStyle = palette.cursorFill;
                     ctx.strokeStyle = palette.cursorStroke;
                     ctx.lineWidth = 2;
                     ctx.beginPath();
-                    ctx.roundRect(cursorX - 14, trebleTopY - 36, 28, (bassTopY + lineGap * 4) - trebleTopY + 72, 6);
+                    ctx.roundRect(
+                        cursorX - (isCompact ? 11 : 14),
+                        trebleTopY - cursorPadY,
+                        isCompact ? 22 : 28,
+                        (bassTopY + lineGap * 4) - trebleTopY + cursorPadY * 2,
+                        6
+                    );
                     ctx.fill();
                     ctx.beginPath();
-                    ctx.moveTo(cursorX, trebleTopY - 36);
-                    ctx.lineTo(cursorX, bassTopY + lineGap * 4 + 36);
+                    ctx.moveTo(cursorX, trebleTopY - cursorPadY);
+                    ctx.lineTo(cursorX, bassTopY + lineGap * 4 + cursorPadY);
                     ctx.stroke();
                     ctx.restore();
                 }
 
-                drawSingleMeasure(ctx, measure, measX, measureWidth, trebleTopY, bassTopY, lineGap, palette);
+                drawSingleMeasure(ctx, measure, measX, measureWidth, trebleTopY, bassTopY, lineGap, palette, isCompact);
             }
 
             ctx.restore();
         }
 
         // Render Multi-Line Page View mode
-        function renderPageSystems(ctx, width, totalHeight, measuresPerRow, rowHeight, palette) {
-            const lineGap = 10.5;
-            const leftMargin = 32;
-            const rightMargin = 28;
+        function renderPageSystems(ctx, width, totalHeight, measuresPerRow, rowHeight, palette, isCompact = false) {
+            const lineGap = isCompact ? 8.8 : 10.5;
+            const leftMargin = isCompact ? 16 : 32;
+            const rightMargin = isCompact ? 12 : 28;
             const totalRows = Math.ceil(AppState.measures.length / measuresPerRow);
 
             for (let row = 0; row < totalRows; row++) {
-                const rowTop = 36 + row * rowHeight;
-                const trebleTopY = rowTop + 34;
-                const bassTopY = trebleTopY + lineGap * 8.5;
+                const rowTop = (isCompact ? 42 : 46) + row * rowHeight;
+                const trebleTopY = rowTop + (isCompact ? 24 : 32);
+                const bassTopY = trebleTopY + lineGap * (isCompact ? 8.0 : 8.5);
 
                 const firstMeas = AppState.measures[row * measuresPerRow];
                 if (!firstMeas) break;
@@ -1742,7 +2056,8 @@
                     lineGap,
                     firstMeas.rootKey,
                     firstMeas.timeSig,
-                    palette
+                    palette,
+                    isCompact
                 );
 
                 const availableWidth = (width - rightMargin) - headerEndX;
@@ -1757,7 +2072,7 @@
 
                     // Draw active playhead cursor on the current measure
                     if (mIdx === AppState.currentMeasureIndex) {
-                        const paddingX = 24;
+                        const paddingX = isCompact ? 16 : 24;
                         const innerW = measureWidth - paddingX * 2;
                         const cursorX = measX + paddingX + (AppState.currentBeatFloat / measure.beatsPerMeasure) * innerW;
 
@@ -1766,57 +2081,57 @@
                         ctx.strokeStyle = palette.cursorStroke;
                         ctx.lineWidth = 2;
                         ctx.beginPath();
-                        ctx.roundRect(cursorX - 12, trebleTopY - 26, 24, (bassTopY + lineGap * 4) - trebleTopY + 52, 5);
+                        ctx.roundRect(cursorX - 11, trebleTopY - 22, 22, (bassTopY + lineGap * 4) - trebleTopY + 44, 5);
                         ctx.fill();
                         ctx.beginPath();
-                        ctx.moveTo(cursorX, trebleTopY - 26);
-                        ctx.lineTo(cursorX, bassTopY + lineGap * 4 + 26);
+                        ctx.moveTo(cursorX, trebleTopY - 22);
+                        ctx.lineTo(cursorX, bassTopY + lineGap * 4 + 22);
                         ctx.stroke();
                         ctx.restore();
                     }
 
-                    drawSingleMeasure(ctx, measure, measX, measureWidth, trebleTopY, bassTopY, lineGap, palette);
+                    drawSingleMeasure(ctx, measure, measX, measureWidth, trebleTopY, bassTopY, lineGap, palette, isCompact);
                 }
             }
         }
 
         // Draw all musical contents of a single measure (Chord symbol, Roman numeral, notes, beams, barline)
-        function drawSingleMeasure(ctx, measure, measX, measWidth, trebleTopY, bassTopY, lineGap, palette) {
+        function drawSingleMeasure(ctx, measure, measX, measWidth, trebleTopY, bassTopY, lineGap, palette, isCompact = false) {
             const staffHeight = lineGap * 4;
-            const padLeft = 26;
-            const padRight = 18;
-            const usableWidth = Math.max(80, measWidth - padLeft - padRight);
+            const padLeft = isCompact ? 18 : 26;
+            const padRight = isCompact ? 12 : 18;
+            const usableWidth = Math.max(64, measWidth - padLeft - padRight);
 
-            // Register beat hitboxes for mouse interaction
+            // Register beat hitboxes for mouse/touch interaction
             for (let b = 0; b < measure.beatsPerMeasure; b += 0.5) {
                 const bx = measX + padLeft + (b / measure.beatsPerMeasure) * usableWidth;
                 renderedBeatHitboxes.push({
                     measureIndex: measure.index,
                     beat: b,
-                    x1: bx - 16,
-                    x2: bx + 16,
-                    y1: trebleTopY - 40,
-                    y2: bassTopY + staffHeight + 40
+                    x1: bx - 18,
+                    x2: bx + 18,
+                    y1: trebleTopY - 36,
+                    y2: bassTopY + staffHeight + 36
                 });
             }
 
             // 1. Measure number & Chord Symbol above Treble Staff
             ctx.save();
-            ctx.font = `500 10px "JetBrains Mono", monospace`;
+            ctx.font = `500 ${isCompact ? 9 : 10}px "JetBrains Mono", monospace`;
             ctx.fillStyle = palette.mutedInk;
-            ctx.fillText(`${measure.index + 1}`, measX + 6, trebleTopY - 10);
+            ctx.fillText(`${measure.index + 1}`, measX + 5, trebleTopY - (isCompact ? 7 : 10));
 
             if (AppState.showChords) {
-                ctx.font = `600 16px "Cormorant Garamond", serif`;
+                ctx.font = `600 ${isCompact ? 14 : 16}px "Cormorant Garamond", serif`;
                 ctx.fillStyle = palette.chordText;
-                ctx.fillText(measure.chord.symbol, measX + padLeft - 4, trebleTopY - 22);
+                ctx.fillText(measure.chord.symbol, measX + padLeft - 2, trebleTopY - (isCompact ? 15 : 22));
             }
 
             // 2. Roman Numeral analysis below Bass Staff
             if (AppState.showRoman) {
-                ctx.font = `italic 600 14px "Cormorant Garamond", serif`;
+                ctx.font = `italic 600 ${isCompact ? 12 : 14}px "Cormorant Garamond", serif`;
                 ctx.fillStyle = palette.romanText;
-                ctx.fillText(measure.chord.roman, measX + padLeft - 4, bassTopY + staffHeight + 28);
+                ctx.fillText(measure.chord.roman, measX + padLeft - 2, bassTopY + staffHeight + (isCompact ? 19 : 26));
             }
             ctx.restore();
 
@@ -1958,7 +2273,6 @@
                     // Handle eighth notes (0.5 beat): beam pairs together or draw single flag
                     if (ev.durationBeats === 0.5) {
                         if (pendingBeamEvent && Math.floor(pendingBeamEvent.startBeat) === Math.floor(ev.startBeat) && pendingBeamEvent.stemUp === stemUp) {
-                            // Draw connecting beam between previous eighth note and current eighth note
                             ctx.lineWidth = 3.8;
                             ctx.beginPath();
                             ctx.moveTo(pendingBeamEvent.stemX, pendingBeamEvent.stemEndY);
@@ -1966,12 +2280,10 @@
                             ctx.stroke();
                             pendingBeamEvent = null;
                         } else {
-                            // Check if next event is a matching eighth note in the same beat
                             const nextEv = events[i + 1];
                             if (nextEv && !nextEv.isRest && nextEv.durationBeats === 0.5 && Math.floor(nextEv.startBeat) === Math.floor(ev.startBeat)) {
                                 pendingBeamEvent = { startBeat: ev.startBeat, stemX, stemEndY, stemUp };
                             } else {
-                                // Draw standalone eighth-note flag
                                 ctx.lineWidth = 1.6;
                                 ctx.beginPath();
                                 ctx.moveTo(stemX, stemEndY);
@@ -2010,7 +2322,6 @@
         // Draw ledger lines above or below the staff
         function drawLedgerLines(ctx, x, noteInfos, isTreble, staffTopY, lineGap, palette) {
             const staffBottomY = staffTopY + lineGap * 4;
-            const halfGap = lineGap / 2;
             const ledgerHalfWidth = lineGap * 0.95;
 
             ctx.save();
@@ -2071,171 +2382,12 @@
         }
 
         /***********************************************************************
-         * 6. BOTTOM 88-KEY INTERACTIVE PIANO VISUALIZER
-         ***********************************************************************/
-        const pianoCanvas = document.getElementById('pianoCanvas');
-        const pianoCtx = pianoCanvas.getContext('2d');
-        let pianoKeyRects = []; // Store geometry for mouse/touch playing
-
-        function isBlackKey(midi) {
-            const pc = midiToPc(midi);
-            return [1, 3, 6, 8, 10].includes(pc);
-        }
-
-        function renderPianoKeyboard() {
-            const dpr = window.devicePixelRatio || 1;
-            const width = pianoCanvas.clientWidth;
-            const height = pianoCanvas.clientHeight;
-
-            pianoCanvas.width = width * dpr;
-            pianoCanvas.height = height * dpr;
-
-            pianoCtx.save();
-            pianoCtx.scale(dpr, dpr);
-            pianoCtx.clearRect(0, 0, width, height);
-
-            // 88 keys: A0 (MIDI 21) to C8 (MIDI 108) -> 52 white keys
-            const startMidi = 21;
-            const endMidi = 108;
-            const whiteKeyWidth = width / 52;
-            const blackKeyWidth = whiteKeyWidth * 0.62;
-            const blackKeyHeight = height * 0.62;
-
-            pianoKeyRects = [];
-
-            const now = performance.now();
-            // Prune expired score highlights
-            for (const [m, data] of AppState.activeScoreNotes.entries()) {
-                if (now > data.expiresAt) {
-                    AppState.activeScoreNotes.delete(m);
-                }
-            }
-
-            // 1. Draw all 52 White Keys
-            let whiteIdx = 0;
-            const midiToWhiteX = {};
-            for (let m = startMidi; m <= endMidi; m++) {
-                if (!isBlackKey(m)) {
-                    const x = whiteIdx * whiteKeyWidth;
-                    midiToWhiteX[m] = x;
-
-                    const scoreHighlight = AppState.activeScoreNotes.get(m);
-                    const isMidiPressed = AppState.activeMidiNotes.has(m);
-
-                    let fill = '#ece6dc';
-                    if (isMidiPressed) {
-                        fill = '#a855f7'; // Violet for live MIDI / mouse input
-                    } else if (scoreHighlight) {
-                        if (scoreHighlight.isGuideTone && AppState.highlightGuideTones) {
-                            fill = '#f59e0b'; // Warm Amber for Guide Tone (3rd/7th)
-                        } else {
-                            fill = scoreHighlight.hand === 'rh' ? '#38bdf8' : '#34d399';
-                        }
-                    }
-
-                    pianoCtx.fillStyle = fill;
-                    pianoCtx.strokeStyle = '#1b1815';
-                    pianoCtx.lineWidth = 1;
-
-                    pianoCtx.beginPath();
-                    pianoCtx.roundRect(x + 0.5, 0, whiteKeyWidth - 1, height - 2, [0, 0, 4, 4]);
-                    pianoCtx.fill();
-                    pianoCtx.stroke();
-
-                    // Mark Middle C (C4 = 60) and other C octaves
-                    if (m % 12 === 0) {
-                        const oct = Math.floor(m / 12) - 1;
-                        pianoCtx.fillStyle = m === 60 ? '#b45309' : '#78716c';
-                        pianoCtx.font = `600 9px "JetBrains Mono", monospace`;
-                        pianoCtx.textAlign = 'center';
-                        pianoCtx.fillText(`C${oct}`, x + whiteKeyWidth / 2, height - 7);
-                    }
-
-                    pianoKeyRects.push({
-                        midi: m,
-                        isBlack: false,
-                        x,
-                        y: 0,
-                        w: whiteKeyWidth,
-                        h: height
-                    });
-
-                    whiteIdx++;
-                }
-            }
-
-            // 2. Draw all 36 Black Keys on top
-            for (let m = startMidi; m <= endMidi; m++) {
-                if (isBlackKey(m)) {
-                    const prevWhiteX = midiToWhiteX[m - 1] || 0;
-                    const x = prevWhiteX + whiteKeyWidth - (blackKeyWidth / 2);
-
-                    const scoreHighlight = AppState.activeScoreNotes.get(m);
-                    const isMidiPressed = AppState.activeMidiNotes.has(m);
-
-                    let fill = '#1f1c19';
-                    if (isMidiPressed) {
-                        fill = '#c084fc';
-                    } else if (scoreHighlight) {
-                        if (scoreHighlight.isGuideTone && AppState.highlightGuideTones) {
-                            fill = '#f59e0b';
-                        } else {
-                            fill = scoreHighlight.hand === 'rh' ? '#0284c7' : '#059669';
-                        }
-                    }
-
-                    pianoCtx.fillStyle = fill;
-                    pianoCtx.strokeStyle = '#0f0e0c';
-                    pianoCtx.lineWidth = 1;
-
-                    pianoCtx.beginPath();
-                    pianoCtx.roundRect(x, 0, blackKeyWidth, blackKeyHeight, [0, 0, 3, 3]);
-                    pianoCtx.fill();
-                    pianoCtx.stroke();
-
-                    pianoKeyRects.push({
-                        midi: m,
-                        isBlack: true,
-                        x,
-                        y: 0,
-                        w: blackKeyWidth,
-                        h: blackKeyHeight
-                    });
-                }
-            }
-
-            pianoCtx.restore();
-        }
-
-        // Hit-test piano canvas for mouse / touch interaction (black keys take priority)
-        function getPianoMidiAtPoint(clientX, clientY) {
-            const rect = pianoCanvas.getBoundingClientRect();
-            const x = clientX - rect.left;
-            const y = clientY - rect.top;
-
-            // Check black keys first
-            for (const k of pianoKeyRects) {
-                if (k.isBlack && x >= k.x && x <= k.x + k.w && y >= k.y && y <= k.y + k.h) {
-                    return k.midi;
-                }
-            }
-            // Check white keys
-            for (const k of pianoKeyRects) {
-                if (!k.isBlack && x >= k.x && x <= k.x + k.w && y >= k.y && y <= k.y + k.h) {
-                    return k.midi;
-                }
-            }
-            return null;
-        }
-
-        /***********************************************************************
-         * 7. INFINITE PLAYBACK LOOP, AUDIO SCHEDULER & MIDI WAIT ENGINE
+         * 6. INFINITE PLAYBACK LOOP, AUDIO SCHEDULER & MIDI WAIT ENGINE
          ***********************************************************************/
 
         // Trigger all notes scheduled at a specific sub-beat (0.5 beat resolution)
         function triggerMeasureBeatAudio(measure, subBeat, playSound = true) {
             const beatDurationSec = 60 / AppState.tempo;
-            const nowMs = performance.now();
 
             // Optional soft wooden metronome on integer beats
             if (playSound && AppState.metronomeEnabled && Math.abs(subBeat - Math.round(subBeat)) < 0.01) {
@@ -2248,12 +2400,6 @@
                     const durSec = ev.durationBeats * beatDurationSec;
                     for (const midi of ev.notes) {
                         if (playSound) audioEngine.playNote(midi, durSec, 0.58);
-                        const isGuide = measure.chord.guideTonePcs.has(midiToPc(midi));
-                        AppState.activeScoreNotes.set(midi, {
-                            hand: 'lh',
-                            isGuideTone: isGuide,
-                            expiresAt: nowMs + durSec * 920
-                        });
                     }
                 }
             }
@@ -2263,19 +2409,10 @@
                 if (!ev.isRest && Math.abs(ev.startBeat - subBeat) < 0.05) {
                     const durSec = ev.durationBeats * beatDurationSec;
                     for (const midi of ev.notes) {
-                        if (playSound) audioEngine.playNote(midi, durSec, 0.72);
-                        const isGuide = measure.chord.guideTonePcs.has(midiToPc(midi));
-                        AppState.activeScoreNotes.set(midi, {
-                            hand: 'rh',
-                            isGuideTone: isGuide,
-                            expiresAt: nowMs + durSec * 920
-                        });
+                        if (playSound) audioEngine.playNote(midi, durSec, 0.74);
                     }
                 }
             }
-
-            updateActiveNotesReadout();
-            renderPianoKeyboard();
         }
 
         // Gather expected pitch classes at current sub-beat for "Attente MIDI" mode
@@ -2320,7 +2457,6 @@
             const nextMeasure = AppState.measures[AppState.currentMeasureIndex];
             const expected = getExpectedSubBeatNotes(nextMeasure, AppState.currentBeatFloat);
             if (expected.length === 0 && AppState.scrollMode === 'midi_wait') {
-                // Advance one more eighth so the user always lands on an actual attack
                 let nextNext = AppState.currentBeatFloat + 0.5;
                 if (nextNext >= nextMeasure.beatsPerMeasure - 0.01) {
                     AppState.currentMeasureIndex++;
@@ -2333,7 +2469,6 @@
 
             updateHudInfo();
             renderScore();
-            renderPianoKeyboard();
         }
 
         // Main animation loop for smooth scrolling and audio scheduling
@@ -2346,7 +2481,6 @@
                 const measure = AppState.measures[AppState.currentMeasureIndex];
                 if (measure) {
                     const beatsPerSec = AppState.tempo / 60;
-                    const prevBeat = AppState.currentBeatFloat;
                     AppState.currentBeatFloat += dtSec * beatsPerSec;
 
                     // Check if we crossed a 0.5-beat boundary
@@ -2380,11 +2514,6 @@
                 }
             }
 
-            // Refresh keyboard if active note highlights are decaying
-            if (AppState.activeScoreNotes.size > 0) {
-                renderPianoKeyboard();
-            }
-
             requestAnimationFrame(animationLoop);
         }
 
@@ -2393,14 +2522,16 @@
             if (AppState.viewLayout !== 'page') return;
             const container = document.getElementById('scoreViewportContainer');
             const width = container.clientWidth;
-            const measuresPerRow = width < 700 ? 2 : (width < 1100 ? 3 : 4);
+            const isCompact = container.clientHeight < 420 || width < 760;
+            const measuresPerRow = width < 640 ? 2 : (width < 1050 ? 3 : 4);
+            const rowHeight = isCompact ? 190 : 245;
             const activeRow = Math.floor(AppState.currentMeasureIndex / measuresPerRow);
-            const targetScrollTop = Math.max(0, activeRow * 250 - 40);
+            const targetScrollTop = Math.max(0, activeRow * rowHeight - 20);
             container.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
         }
 
         /***********************************************************************
-         * 8. WEB MIDI API INTEGRATION & VIRTUAL KEYBOARD INPUT
+         * 7. WEB MIDI API INTEGRATION
          ***********************************************************************/
         function handleUserNoteOn(midi, velocity = 0.75) {
             AppState.activeMidiNotes.add(midi);
@@ -2413,14 +2544,13 @@
                     const subBeat = Math.round(AppState.currentBeatFloat * 2) / 2;
                     const expectedMidis = getExpectedSubBeatNotes(measure, subBeat);
 
-                    // Match either exact MIDI pitch or same pitch class (for flexible octave keyboards)
+                    // Match either exact MIDI pitch or same pitch class
                     for (const exp of expectedMidis) {
                         if (exp === midi || midiToPc(exp) === midiToPc(midi)) {
                             AppState.satisfiedSubBeatNotes.add(exp);
                         }
                     }
 
-                    // Advance as soon as Right Hand melody note or all expected notes are played
                     const rhExpected = [];
                     for (const ev of measure.rhEvents) {
                         if (!ev.isRest && Math.abs(ev.startBeat - subBeat) < 0.05) {
@@ -2436,25 +2566,21 @@
                     }
                 }
             }
-
-            updateActiveNotesReadout();
-            renderPianoKeyboard();
         }
 
         function handleUserNoteOff(midi) {
             AppState.activeMidiNotes.delete(midi);
-            updateActiveNotesReadout();
-            renderPianoKeyboard();
         }
 
         // Initialize Web MIDI API if supported by browser
         function initWebMIDI() {
             const dot = document.getElementById('midiStatusDot');
             const text = document.getElementById('midiStatusText');
+            if (!dot || !text) return;
 
             if (!navigator.requestMIDIAccess) {
-                dot.className = 'w-2 h-2 rounded-full bg-amber-500';
-                text.textContent = 'MIDI: Clavier Virtuel';
+                dot.className = 'w-2 h-2 rounded-full bg-studio-600';
+                text.textContent = 'MIDI: Off';
                 return;
             }
 
@@ -2463,10 +2589,10 @@
                     const inputs = Array.from(midiAccess.inputs.values());
                     if (inputs.length > 0) {
                         dot.className = 'w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]';
-                        text.textContent = `MIDI: ${inputs[0].name.slice(0, 12)}`;
+                        text.textContent = `MIDI: ${inputs[0].name.slice(0, 10)}`;
                     } else {
                         dot.className = 'w-2 h-2 rounded-full bg-amber-400';
-                        text.textContent = 'MIDI: Prêt (0 périph.)';
+                        text.textContent = 'MIDI: Prêt';
                     }
 
                     for (const input of inputs) {
@@ -2485,22 +2611,27 @@
                 bindInputs();
                 midiAccess.onstatechange = bindInputs;
             }).catch(() => {
-                dot.className = 'w-2 h-2 rounded-full bg-amber-500';
-                text.textContent = 'MIDI: Simul. Clavier';
+                dot.className = 'w-2 h-2 rounded-full bg-studio-600';
+                text.textContent = 'MIDI';
             });
         }
 
         /***********************************************************************
-         * 9. UI CONTROLS, PRESET MANAGEMENT & EVENT LISTENERS
+         * 8. UI CONTROLS, PRESET MANAGEMENT & EVENT LISTENERS
          ***********************************************************************/
         function updateHeaderSummary() {
             const keyInfo = KEY_SIGNATURES[AppState.rootKey] || KEY_SIGNATURES['C'];
             const modeLabel = MODE_LABELS_FR[AppState.mode] || 'Majeur';
-            document.getElementById('harmonicSummaryText').textContent =
-                `${keyInfo.labelFr} ${modeLabel} • ${AppState.timeSig} • Lecture infinie`;
+            const summaryEl = document.getElementById('harmonicSummaryText');
+            if (summaryEl) {
+                summaryEl.textContent = `${keyInfo.labelFr} ${modeLabel} • ${AppState.timeSig} • Lecture infinie`;
+            }
 
             const presetObj = STYLE_PRESETS[AppState.activePreset];
-            document.getElementById('activePresetBadge').textContent = presetObj ? presetObj.name : 'Personnalisé';
+            const badgeEl = document.getElementById('activePresetBadge');
+            if (badgeEl) {
+                badgeEl.textContent = presetObj ? presetObj.name : 'Personnalisé';
+            }
         }
 
         function updateHudInfo() {
@@ -2521,39 +2652,61 @@
                 const names = expected.map(m => formatPitchClass(midiToPc(m), keyInfo.useFlats, 'fr'));
                 document.getElementById('midiExpectedNotesLabel').textContent =
                     names.length > 0 ? [...new Set(names)].join(', ') : 'Silence';
-
-                // Highlight expected notes on the 88-key visual keyboard so user can see or click them
-                AppState.activeScoreNotes.clear();
-                for (const m of expected) {
-                    AppState.activeScoreNotes.set(m, {
-                        hand: m >= 60 ? 'rh' : 'lh',
-                        isGuideTone: measure.chord.guideTonePcs.has(midiToPc(m)),
-                        expiresAt: performance.now() + 60000
-                    });
-                }
             } else {
                 banner.classList.add('hidden');
                 banner.classList.remove('flex');
             }
         }
 
-        function updateActiveNotesReadout() {
-            const readout = document.getElementById('activeNotesReadout');
-            const keyInfo = KEY_SIGNATURES[AppState.rootKey] || KEY_SIGNATURES['C'];
-            const allMidis = [
-                ...Array.from(AppState.activeScoreNotes.keys()),
-                ...Array.from(AppState.activeMidiNotes)
-            ];
-            const uniqueMidis = [...new Set(allMidis)].sort((a, b) => a - b);
-            if (uniqueMidis.length === 0) {
-                readout.textContent = '';
-                return;
+        // Synchronize Sound Type across both Header and Drawer selectors & play audition note
+        function setSoundType(newSoundType, playPreview = true) {
+            AppState.soundType = newSoundType;
+            const headerSel = document.getElementById('selectSoundTypeHeader');
+            const drawerSel = document.getElementById('selectSoundTypeDrawer');
+            if (headerSel && headerSel.value !== newSoundType) headerSel.value = newSoundType;
+            if (drawerSel && drawerSel.value !== newSoundType) drawerSel.value = newSoundType;
+
+            if (playPreview) {
+                audioEngine.init();
+                const meas = AppState.measures[AppState.currentMeasureIndex];
+                if (meas) {
+                    triggerMeasureBeatAudio(meas, 0, true);
+                } else {
+                    audioEngine.playNote(60, 1.2, 0.72);
+                    audioEngine.playNote(64, 1.2, 0.68);
+                    audioEngine.playNote(67, 1.2, 0.68);
+                }
             }
-            const names = uniqueMidis.map(m => {
-                const oct = Math.floor(m / 12) - 1;
-                return `${formatPitchClass(midiToPc(m), keyInfo.useFlats, 'fr')}${oct}`;
-            });
-            readout.textContent = `• ${names.join(' – ')}`;
+        }
+
+        // Synchronize Reverb across Header and Drawer sliders
+        function setReverbAmount(percentValue) {
+            const clamped = Math.max(0, Math.min(100, Number(percentValue)));
+            const s1 = document.getElementById('sliderReverb');
+            const s2 = document.getElementById('sliderReverbDrawer');
+            const v2 = document.getElementById('valReverbDrawer');
+            if (s1) s1.value = String(clamped);
+            if (s2) s2.value = String(clamped);
+            if (v2) v2.textContent = `${Math.round(clamped)}%`;
+            audioEngine.updateReverbMix(clamped / 100);
+        }
+
+        // Synchronize Scroll Mode across Header and Drawer selectors
+        function setScrollMode(modeValue) {
+            AppState.scrollMode = modeValue;
+            const s1 = document.getElementById('selectScrollMode');
+            const s2 = document.getElementById('selectScrollModeDrawer');
+            if (s1 && s1.value !== modeValue) s1.value = modeValue;
+            if (s2 && s2.value !== modeValue) s2.value = modeValue;
+
+            if (AppState.scrollMode === 'midi_wait') {
+                AppState.isPlaying = false;
+                document.getElementById('iconPlay').classList.remove('hidden');
+                document.getElementById('iconPause').classList.add('hidden');
+                document.getElementById('labelPlayPause').textContent = 'Lecture';
+            }
+            updateHudInfo();
+            renderScore();
         }
 
         // Apply one of the 4 signature contemplative presets
@@ -2581,15 +2734,14 @@
             document.getElementById('selectLeftHandPattern').value = p.leftHandPattern;
             document.getElementById('selectRightHandDensity').value = p.rightHandDensity;
             document.getElementById('selectIntervalLeap').value = p.intervalLeap;
-            document.getElementById('sliderReverb').value = p.reverb;
-            audioEngine.updateReverbMix(p.reverb / 100);
+            setReverbAmount(p.reverb);
 
             // Highlight active preset button card
             document.querySelectorAll('.preset-btn').forEach(btn => {
                 const isSelected = btn.getAttribute('data-preset') === presetKey;
                 btn.className = isSelected
-                    ? 'preset-btn text-left p-2.5 rounded-xl border border-amber-500/60 bg-amber-500/10 hover:bg-amber-500/15 transition group'
-                    : 'preset-btn text-left p-2.5 rounded-xl border border-studio-700 bg-studio-850 hover:bg-studio-800 transition group';
+                    ? 'preset-btn text-left p-2 rounded-xl border border-amber-500/60 bg-amber-500/10 hover:bg-amber-500/15 transition group'
+                    : 'preset-btn text-left p-2 rounded-xl border border-studio-700 bg-studio-850 hover:bg-studio-800 transition group';
             });
 
             rebuildScoreStream();
@@ -2643,6 +2795,7 @@
                     AppState.leftHandPattern = sc.leftHandPattern;
                     AppState.rightHandDensity = Number(sc.rightHandDensity);
                     AppState.intervalLeap = sc.intervalLeap;
+                    if (sc.soundType) setSoundType(sc.soundType, false);
 
                     document.getElementById('sliderTempo').value = sc.tempo;
                     document.getElementById('valTempo').textContent = `${sc.tempo} BPM`;
@@ -2684,7 +2837,6 @@
                 label.textContent = 'Pause';
                 AppState.lastFrameTime = performance.now();
 
-                // If user starts playback in "Attente MIDI" mode, switch smoothly to continuous or step
                 if (AppState.scrollMode === 'midi_wait') {
                     advanceOneSubBeatStep(true);
                 }
@@ -2695,17 +2847,32 @@
             }
         }
 
+        // Open / Close Configuration Drawer with Mobile Backdrop support
+        function toggleConfigDrawer(forceOpen) {
+            const drawer = document.getElementById('configDrawer');
+            const backdrop = document.getElementById('drawerBackdrop');
+            const isHidden = drawer.classList.contains('hidden');
+            const shouldOpen = forceOpen !== undefined ? forceOpen : isHidden;
+
+            if (shouldOpen) {
+                drawer.classList.remove('hidden');
+                backdrop.classList.remove('hidden');
+            } else {
+                drawer.classList.add('hidden');
+                backdrop.classList.add('hidden');
+            }
+
+            setTimeout(() => {
+                renderScore();
+            }, 40);
+        }
+
         // Bind all DOM Event Listeners
         function bindEventListeners() {
-            // Drawer toggle
-            const drawer = document.getElementById('configDrawer');
-            document.getElementById('btnToggleDrawer').addEventListener('click', () => {
-                drawer.classList.toggle('hidden');
-                setTimeout(() => {
-                    renderScore();
-                    renderPianoKeyboard();
-                }, 50);
-            });
+            // Drawer toggle, close button, and mobile backdrop
+            document.getElementById('btnToggleDrawer').addEventListener('click', () => toggleConfigDrawer());
+            document.getElementById('btnCloseDrawer').addEventListener('click', () => toggleConfigDrawer(false));
+            document.getElementById('drawerBackdrop').addEventListener('click', () => toggleConfigDrawer(false));
 
             // Transport controls
             document.getElementById('btnPlayPause').addEventListener('click', togglePlayPause);
@@ -2718,29 +2885,34 @@
                 rebuildScoreStream();
             });
 
+            // Sound Type selectors (Header & Drawer)
+            document.getElementById('selectSoundTypeHeader').addEventListener('change', (e) => {
+                setSoundType(e.target.value, true);
+            });
+            document.getElementById('selectSoundTypeDrawer').addEventListener('change', (e) => {
+                setSoundType(e.target.value, true);
+            });
+
             // Tempo slider
             document.getElementById('sliderTempo').addEventListener('input', (e) => {
                 AppState.tempo = Number(e.target.value);
                 document.getElementById('valTempo').textContent = `${AppState.tempo} BPM`;
             });
 
-            // Scroll Mode selector
+            // Scroll Mode selectors (Header & Drawer)
             document.getElementById('selectScrollMode').addEventListener('change', (e) => {
-                AppState.scrollMode = e.target.value;
-                if (AppState.scrollMode === 'midi_wait') {
-                    AppState.isPlaying = false;
-                    document.getElementById('iconPlay').classList.remove('hidden');
-                    document.getElementById('iconPause').classList.add('hidden');
-                    document.getElementById('labelPlayPause').textContent = 'Lecture';
-                }
-                updateHudInfo();
-                renderScore();
-                renderPianoKeyboard();
+                setScrollMode(e.target.value);
+            });
+            document.getElementById('selectScrollModeDrawer').addEventListener('change', (e) => {
+                setScrollMode(e.target.value);
             });
 
-            // Felt & Reverb slider
+            // Reverb sliders (Header & Drawer)
             document.getElementById('sliderReverb').addEventListener('input', (e) => {
-                audioEngine.updateReverbMix(Number(e.target.value) / 100);
+                setReverbAmount(e.target.value);
+            });
+            document.getElementById('sliderReverbDrawer').addEventListener('input', (e) => {
+                setReverbAmount(e.target.value);
             });
 
             // Metronome button
@@ -2763,6 +2935,15 @@
             document.getElementById('btnSheetTheme').addEventListener('click', () => {
                 AppState.sheetTheme = AppState.sheetTheme === 'parchment' ? 'dark' : 'parchment';
                 renderScore();
+            });
+
+            // Fullscreen toggle for smartphone horizontal view
+            document.getElementById('btnFullscreen').addEventListener('click', () => {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen?.().catch(() => {});
+                } else {
+                    document.exitFullscreen?.().catch(() => {});
+                }
             });
 
             // Style Preset cards
@@ -2822,14 +3003,13 @@
             document.getElementById('chkHighlightGuideTones').addEventListener('change', (e) => {
                 AppState.highlightGuideTones = e.target.checked;
                 renderScore();
-                renderPianoKeyboard();
             });
             document.getElementById('selectNoteNames').addEventListener('change', (e) => {
                 AppState.noteNameMode = e.target.value;
                 renderScore();
             });
 
-            // Save Custom Scenario
+            // Save Custom Scenario (including chosen Sound Type)
             document.getElementById('btnSaveScenario').addEventListener('click', () => {
                 const input = document.getElementById('inputScenarioName');
                 const name = input.value.trim() || `Scénario ${AppState.rootKey} ${MODE_LABELS_FR[AppState.mode]}`;
@@ -2837,6 +3017,7 @@
                 list.unshift({
                     name,
                     tempo: AppState.tempo,
+                    soundType: AppState.soundType,
                     rootKey: AppState.rootKey,
                     mode: AppState.mode,
                     timeSig: AppState.timeSig,
@@ -2850,8 +3031,50 @@
                 renderSavedScenariosList();
             });
 
-            // Score Canvas Click: jump to clicked measure/beat and audition chord
+            // Score Canvas Touch-Scrubbing & Tap-to-Audition (Optimized for Smartphone Horizontal Mode)
+            let isDraggingScore = false;
+            let dragStartX = 0;
+            let dragStartBeatGlobal = 0;
+            let hasDraggedSignificantly = false;
+
+            scoreCanvas.addEventListener('pointerdown', (e) => {
+                if (AppState.viewLayout !== 'ribbon') return;
+                isDraggingScore = true;
+                hasDraggedSignificantly = false;
+                dragStartX = e.clientX;
+                const meas = AppState.measures[AppState.currentMeasureIndex];
+                const bpm = meas ? meas.beatsPerMeasure : 3;
+                dragStartBeatGlobal = AppState.currentMeasureIndex * bpm + AppState.currentBeatFloat;
+            });
+
+            window.addEventListener('pointermove', (e) => {
+                if (!isDraggingScore || AppState.viewLayout !== 'ribbon') return;
+                const dx = e.clientX - dragStartX;
+                if (Math.abs(dx) > 8) {
+                    hasDraggedSignificantly = true;
+                    const meas = AppState.measures[AppState.currentMeasureIndex] || AppState.measures[0];
+                    if (!meas) return;
+                    const bpm = meas.beatsPerMeasure;
+                    const beatDelta = -(dx / 210) * bpm;
+                    const targetGlobalBeat = Math.max(0, dragStartBeatGlobal + beatDelta);
+
+                    AppState.currentMeasureIndex = Math.floor(targetGlobalBeat / bpm);
+                    AppState.currentBeatFloat = targetGlobalBeat % bpm;
+                    ensureInfiniteBuffer();
+                    updateHudInfo();
+                    renderScore();
+                }
+            });
+
+            window.addEventListener('pointerup', () => {
+                isDraggingScore = false;
+            });
+
             scoreCanvas.addEventListener('click', (e) => {
+                if (hasDraggedSignificantly) {
+                    hasDraggedSignificantly = false;
+                    return;
+                }
                 audioEngine.init();
                 const rect = scoreCanvas.getBoundingClientRect();
                 const x = e.clientX - rect.left;
@@ -2871,41 +3094,7 @@
                 }
             });
 
-            // Interactive Piano Keyboard Mouse / Touch Events
-            let isPointerDownOnPiano = false;
-            let lastPointerMidi = null;
-
-            pianoCanvas.addEventListener('pointerdown', (e) => {
-                audioEngine.init();
-                isPointerDownOnPiano = true;
-                const midi = getPianoMidiAtPoint(e.clientX, e.clientY);
-                if (midi !== null) {
-                    lastPointerMidi = midi;
-                    handleUserNoteOn(midi, 0.72);
-                }
-            });
-
-            pianoCanvas.addEventListener('pointermove', (e) => {
-                if (!isPointerDownOnPiano) return;
-                const midi = getPianoMidiAtPoint(e.clientX, e.clientY);
-                if (midi !== null && midi !== lastPointerMidi) {
-                    if (lastPointerMidi !== null) handleUserNoteOff(lastPointerMidi);
-                    lastPointerMidi = midi;
-                    handleUserNoteOn(midi, 0.65);
-                }
-            });
-
-            window.addEventListener('pointerup', () => {
-                if (isPointerDownOnPiano) {
-                    isPointerDownOnPiano = false;
-                    if (lastPointerMidi !== null) {
-                        handleUserNoteOff(lastPointerMidi);
-                        lastPointerMidi = null;
-                    }
-                }
-            });
-
-            // Keyboard shortcuts (Space = Play/Pause, Right Arrow = Step Beat, R = Regenerate)
+            // Keyboard shortcuts (Space = Play/Pause, Right Arrow = Step Beat)
             window.addEventListener('keydown', (e) => {
                 if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
                 if (e.code === 'Space') {
@@ -2918,10 +3107,12 @@
                 }
             });
 
-            // Responsive Resize handler
+            // Responsive Resize & Orientation Change handler
             window.addEventListener('resize', () => {
                 renderScore();
-                renderPianoKeyboard();
+            });
+            window.addEventListener('orientationchange', () => {
+                setTimeout(renderScore, 120);
             });
         }
 
