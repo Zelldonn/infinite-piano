@@ -217,7 +217,7 @@
             <!-- Tempo Slider (visible on horizontal smartphone too) -->
             <div class="flex items-center gap-1.5 px-0.5 shrink-0">
                 <span id="valTempo" class="text-[11px] font-mono font-medium text-parchment-100 whitespace-nowrap">66 BPM</span>
-                <input id="sliderTempo" type="range" min="40" max="140" value="66" class="w-14 sm:w-20">
+                <input id="sliderTempo" type="range" min="20" max="140" value="66" class="w-14 sm:w-20">
             </div>
 
             <!-- Scroll / Practice Mode -->
@@ -225,15 +225,20 @@
                 <select id="selectScrollMode" class="bg-studio-850 text-parchment-100 text-xs rounded-lg px-2 py-1 border border-studio-700 focus:outline-none focus:border-amber-500">
                     <option value="continuous">Défilement continu</option>
                     <option value="measure">Par mesure (Saut)</option>
-                    <option value="midi_wait">Attente MIDI</option>
+                    <option value="mic_wait">🎙️ Attente Micro</option>
+                    <option value="midi_wait">🎹 Attente MIDI</option>
                 </select>
             </div>
         </div>
 
         <!-- Right Controls: Pedagogy Quick-Toggles, Reverb, Metronome, Layout, Theme, Fullscreen -->
         <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
-            <!-- Quick Pedagogical Toggles (Look-Ahead, Ear Training, Improvisation) -->
+            <!-- Quick Pedagogical & Mic Wait Toggles (Mic Wait, Look-Ahead, Ear Training, Improvisation) -->
             <div class="flex items-center gap-1 bg-studio-950/60 p-0.5 rounded-lg border border-studio-800">
+                <button id="btnMicWait" class="px-1.5 py-1 rounded-md text-[11px] font-medium text-studio-300 hover:text-parchment-100 hover:bg-studio-800 transition flex items-center gap-1" title="Mode Attente Note (Micro) : écoute votre vrai piano via le microphone et avance dès que vous jouez la bonne note">
+                    <span>🎙️</span>
+                    <span id="labelMicWait" class="hidden md:inline">Micro</span>
+                </button>
                 <button id="btnLookAhead" class="px-1.5 py-1 rounded-md text-[11px] font-medium text-studio-300 hover:text-parchment-100 hover:bg-studio-800 transition flex items-center gap-1" title="Regard en avance : masque progressivement le temps ou la mesure en cours pour forcer l'œil à anticiper">
                     <span>👁️</span>
                     <span id="labelLookAhead" class="hidden md:inline">Regard</span>
@@ -492,7 +497,8 @@
                         <select id="selectScrollModeDrawer" class="bg-studio-900 text-parchment-100 text-xs rounded px-2 py-1 border border-studio-700">
                             <option value="continuous">Défilement continu</option>
                             <option value="measure">Par mesure (Saut)</option>
-                            <option value="midi_wait">Attente MIDI</option>
+                            <option value="mic_wait">🎙️ Attente Micro</option>
+                            <option value="midi_wait">🎹 Attente MIDI</option>
                         </select>
                     </div>
 
@@ -612,8 +618,9 @@
                             <span id="pedagogyBannerText">✨ Mode actif</span>
                         </button>
                         <div id="midiWaitBanner" class="hidden items-center gap-1.5 px-2.5 py-1 rounded-full bg-studio-900/90 border border-amber-400/60 text-amber-300 shadow">
-                            <span>Attente :</span>
+                            <span id="waitBannerModeLabel">Attente :</span>
                             <strong id="midiExpectedNotesLabel" class="font-mono">Ré, Fa, La</strong>
+                            <span id="micDetectedNoteBadge" class="hidden ml-1 pl-1.5 border-l border-studio-700 text-[10px] font-mono text-emerald-300">🎙️ --</span>
                         </div>
                         <div class="hidden md:flex items-center gap-2.5 px-2.5 py-1 rounded-lg bg-studio-900/75 backdrop-blur-sm border border-studio-700/50 text-studio-200">
                             <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-500 inline-block"></span> Guide (3ce/7e)</span>
@@ -2795,7 +2802,7 @@
             // If the new sub-beat has no notes starting on it, skip empty eighth subdivisions automatically
             const nextMeasure = AppState.measures[AppState.currentMeasureIndex];
             const expected = getExpectedSubBeatNotes(nextMeasure, AppState.currentBeatFloat);
-            if (expected.length === 0 && AppState.scrollMode === 'midi_wait') {
+            if (expected.length === 0 && (AppState.scrollMode === 'midi_wait' || AppState.scrollMode === 'mic_wait')) {
                 let nextNext = AppState.currentBeatFloat + 0.5;
                 if (nextNext >= nextMeasure.beatsPerMeasure - 0.01) {
                     AppState.currentMeasureIndex++;
@@ -2810,13 +2817,18 @@
             renderScore();
         }
 
-        // Main animation loop for smooth scrolling and audio scheduling
+        // Main animation loop for smooth scrolling, audio scheduling, and real-time Mic Pitch Detection
         function animationLoop(timestamp) {
             if (!AppState.lastFrameTime) AppState.lastFrameTime = timestamp;
             const dtSec = Math.min(0.1, (timestamp - AppState.lastFrameTime) / 1000);
             AppState.lastFrameTime = timestamp;
 
-            if (AppState.isPlaying && AppState.scrollMode !== 'midi_wait') {
+            // Poll Microphone Pitch Detector when in 'mic_wait' mode
+            if (AppState.scrollMode === 'mic_wait' && micPitchDetector.isListening) {
+                micPitchDetector.processFrame(timestamp);
+            }
+
+            if (AppState.isPlaying && AppState.scrollMode !== 'midi_wait' && AppState.scrollMode !== 'mic_wait') {
                 const measure = AppState.measures[AppState.currentMeasureIndex];
                 if (measure) {
                     const beatsPerSec = AppState.tempo / 60;
@@ -2870,46 +2882,302 @@
         }
 
         /***********************************************************************
-         * 7. WEB MIDI API INTEGRATION
+         * 7. WEB MIDI & MICROPHONE PITCH DETECTION ("ATTENTE NOTE MICRO / MIDI")
          ***********************************************************************/
+
+        // Evaluate a detected note (from either MIDI or Microphone) against the current sub-beat target
+        function checkWaitModeNoteMatch(midi) {
+            if (AppState.scrollMode !== 'midi_wait' && AppState.scrollMode !== 'mic_wait') return false;
+            const measure = AppState.measures[AppState.currentMeasureIndex];
+            if (!measure) return false;
+
+            const subBeat = Math.round(AppState.currentBeatFloat * 2) / 2;
+            const expectedMidis = getExpectedSubBeatNotes(measure, subBeat);
+
+            // Match either exact MIDI pitch or same pitch class (octave-tolerant for comfortable practice)
+            for (const exp of expectedMidis) {
+                if (exp === midi || midiToPc(exp) === midiToPc(midi)) {
+                    AppState.satisfiedSubBeatNotes.add(exp);
+                }
+            }
+
+            const rhExpected = [];
+            for (const ev of measure.rhEvents) {
+                if (!ev.isRest && Math.abs(ev.startBeat - subBeat) < 0.05) {
+                    rhExpected.push(...ev.notes);
+                }
+            }
+
+            // In Mic mode, acoustic polyphony can mask inner accompaniment notes, so matching ANY expected RH note
+            // (or all RH notes in MIDI mode) advances smoothly.
+            if (AppState.scrollMode === 'mic_wait') {
+                const targetPool = rhExpected.length > 0 ? rhExpected : expectedMidis;
+                const matched = targetPool.length > 0 && targetPool.some(m => AppState.satisfiedSubBeatNotes.has(m));
+                if (matched) {
+                    advanceOneSubBeatStep(false);
+                    return true;
+                }
+            } else {
+                const requiredTarget = rhExpected.length > 0 ? rhExpected : expectedMidis;
+                const allSatisfied = requiredTarget.length > 0 && requiredTarget.every(m => AppState.satisfiedSubBeatNotes.has(m));
+                if (allSatisfied) {
+                    advanceOneSubBeatStep(false);
+                    return true;
+                }
+            }
+            return false;
+        }
+
         function handleUserNoteOn(midi, velocity = 0.75) {
             AppState.activeMidiNotes.add(midi);
             audioEngine.playNote(midi, 1.4, velocity);
-
-            // Check if "Attente MIDI" mode is active
-            if (AppState.scrollMode === 'midi_wait') {
-                const measure = AppState.measures[AppState.currentMeasureIndex];
-                if (measure) {
-                    const subBeat = Math.round(AppState.currentBeatFloat * 2) / 2;
-                    const expectedMidis = getExpectedSubBeatNotes(measure, subBeat);
-
-                    // Match either exact MIDI pitch or same pitch class
-                    for (const exp of expectedMidis) {
-                        if (exp === midi || midiToPc(exp) === midiToPc(midi)) {
-                            AppState.satisfiedSubBeatNotes.add(exp);
-                        }
-                    }
-
-                    const rhExpected = [];
-                    for (const ev of measure.rhEvents) {
-                        if (!ev.isRest && Math.abs(ev.startBeat - subBeat) < 0.05) {
-                            rhExpected.push(...ev.notes);
-                        }
-                    }
-
-                    const requiredTarget = rhExpected.length > 0 ? rhExpected : expectedMidis;
-                    const allSatisfied = requiredTarget.length > 0 && requiredTarget.every(m => AppState.satisfiedSubBeatNotes.has(m));
-
-                    if (allSatisfied) {
-                        advanceOneSubBeatStep(false);
-                    }
-                }
-            }
+            checkWaitModeNoteMatch(midi);
         }
 
         function handleUserNoteOff(midi) {
             AppState.activeMidiNotes.delete(midi);
         }
+
+        // Real-Time Microphone Pitch & Spectral Chroma Detector for Acoustic/Digital Pianos
+        class MicPitchDetector {
+            constructor() {
+                this.stream = null;
+                this.source = null;
+                this.analyser = null;
+                this.timeBuf = null;
+                this.freqBuf = null;
+                this.isListening = false;
+                this.lastDetectedMidi = null;
+                this.stableCandidateMidi = null;
+                this.stableFrames = 0;
+                this.lastAdvanceTimestamp = 0;
+                this.lastAdvancedMidi = null;
+            }
+
+            async start() {
+                if (this.isListening) return true;
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    alert("Votre navigateur ne supporte pas l'accès au microphone (vérifiez que vous êtes bien en HTTPS ou localhost).");
+                    return false;
+                }
+                try {
+                    audioEngine.init();
+                    try {
+                        this.stream = await navigator.mediaDevices.getUserMedia({
+                            audio: {
+                                echoCancellation: false,
+                                autoGainControl: false,
+                                noiseSuppression: false
+                            }
+                        });
+                    } catch (_) {
+                        this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    }
+
+                    this.source = audioEngine.ctx.createMediaStreamSource(this.stream);
+                    this.analyser = audioEngine.ctx.createAnalyser();
+                    this.analyser.fftSize = 4096;
+                    this.analyser.smoothingTimeConstant = 0.25;
+                    this.source.connect(this.analyser);
+
+                    this.timeBuf = new Float32Array(this.analyser.fftSize);
+                    this.freqBuf = new Float32Array(this.analyser.frequencyBinCount);
+                    this.isListening = true;
+                    this.updateMicBadge('🎙️ Écoute...');
+                    return true;
+                } catch (err) {
+                    console.warn('Microphone access denied or failed:', err);
+                    this.updateMicBadge('🎙️ Micro refusé');
+                    return false;
+                }
+            }
+
+            stop() {
+                if (this.source) {
+                    try { this.source.disconnect(); } catch (_) {}
+                    this.source = null;
+                }
+                if (this.stream) {
+                    this.stream.getTracks().forEach(t => t.stop());
+                    this.stream = null;
+                }
+                this.isListening = false;
+                this.lastDetectedMidi = null;
+            }
+
+            updateMicBadge(label) {
+                const badge = document.getElementById('micDetectedNoteBadge');
+                if (badge) {
+                    badge.textContent = label;
+                }
+            }
+
+            // Normalized Autocorrelation (NSDF) pitch estimation from time-domain buffer
+            detectMonophonicPitch(sampleRate) {
+                const buf = this.timeBuf;
+                const n = buf.length;
+
+                // 1. Compute RMS energy to ignore silence / background hum
+                let rms = 0;
+                for (let i = 0; i < n; i++) {
+                    rms += buf[i] * buf[i];
+                }
+                rms = Math.sqrt(rms / n);
+                if (rms < 0.012) return null; // Too quiet
+
+                // Search lag range corresponding to 60 Hz (B1) .. 1100 Hz (C#6)
+                const minLag = Math.floor(sampleRate / 1100);
+                const maxLag = Math.min(Math.floor(sampleRate / 60), Math.floor(n / 2));
+                const windowLen = Math.min(1024, n - maxLag);
+
+                let bestLag = -1;
+                let bestCorr = 0;
+
+                // Find first strong normalized autocorrelation peak after zero-crossing
+                let inPositiveRegion = false;
+                let passedFirstZeroCross = false;
+
+                for (let lag = minLag; lag <= maxLag; lag++) {
+                    let sumProd = 0;
+                    let sumSq1 = 0;
+                    let sumSq2 = 0;
+                    for (let i = 0; i < windowLen; i += 2) { // Stride 2 for fast mobile CPU performance
+                        const a = buf[i];
+                        const b = buf[i + lag];
+                        sumProd += a * b;
+                        sumSq1 += a * a;
+                        sumSq2 += b * b;
+                    }
+                    const denom = Math.sqrt(sumSq1 * sumSq2);
+                    const corr = denom > 1e-8 ? (sumProd / denom) : 0;
+
+                    if (!passedFirstZeroCross) {
+                        if (corr < 0) passedFirstZeroCross = true;
+                        continue;
+                    }
+
+                    if (corr > 0.62 && corr > bestCorr) {
+                        bestCorr = corr;
+                        bestLag = lag;
+                        inPositiveRegion = true;
+                    } else if (inPositiveRegion && corr < bestCorr - 0.12) {
+                        // Stop at the first dominant fundamental peak to avoid octave-down subharmonics
+                        break;
+                    }
+                }
+
+                if (bestLag <= 0 || bestCorr < 0.62) return null;
+
+                const freq = sampleRate / bestLag;
+                const midi = Math.round(69 + 12 * Math.log2(freq / 440));
+                if (midi < 33 || midi > 96) return null;
+                return midi;
+            }
+
+            // Check if any expected target MIDI pitch has a prominent fundamental + 2nd harmonic peak in FFT
+            // (Helps when playing two-handed chords where monophonic autocorrelation might lock onto the bass)
+            detectExpectedNoteInSpectrum(sampleRate, expectedMidis) {
+                if (!expectedMidis || expectedMidis.length === 0) return null;
+                this.analyser.getFloatFrequencyData(this.freqBuf);
+                const binHz = sampleRate / this.analyser.fftSize;
+
+                // Compute average noise floor in piano mid-range (100Hz - 1000Hz)
+                let sumDb = 0;
+                let countBins = 0;
+                const startBin = Math.max(2, Math.floor(100 / binHz));
+                const endBin = Math.min(this.freqBuf.length - 1, Math.ceil(1000 / binHz));
+                for (let b = startBin; b <= endBin; b++) {
+                    sumDb += this.freqBuf[b];
+                    countBins++;
+                }
+                const avgDb = countBins > 0 ? (sumDb / countBins) : -90;
+                if (avgDb < -78) return null;
+
+                let bestMidi = null;
+                let bestScore = -999;
+
+                for (const midi of expectedMidis) {
+                    const f0 = 440 * Math.pow(2, (midi - 69) / 12);
+                    const bin1 = Math.round(f0 / binHz);
+                    const bin2 = Math.round((f0 * 2) / binHz);
+                    if (bin1 <= 1 || bin2 >= this.freqBuf.length - 1) continue;
+
+                    const peak1 = Math.max(this.freqBuf[bin1 - 1], this.freqBuf[bin1], this.freqBuf[bin1 + 1]);
+                    const peak2 = Math.max(this.freqBuf[bin2 - 1], this.freqBuf[bin2], this.freqBuf[bin2 + 1]);
+                    const score = peak1 * 0.7 + peak2 * 0.3;
+
+                    // Require the harmonic peak to stand well above the ambient noise floor
+                    if (peak1 > -54 && (peak1 - avgDb) > 15 && score > bestScore) {
+                        bestScore = score;
+                        bestMidi = midi;
+                    }
+                }
+                return bestMidi;
+            }
+
+            processFrame(timestamp) {
+                if (!this.isListening || !this.analyser || !audioEngine.ctx) return;
+
+                this.analyser.getFloatTimeDomainData(this.timeBuf);
+                const sampleRate = audioEngine.ctx.sampleRate;
+
+                const measure = AppState.measures[AppState.currentMeasureIndex];
+                const subBeat = Math.round(AppState.currentBeatFloat * 2) / 2;
+                const expectedMidis = measure ? getExpectedSubBeatNotes(measure, subBeat) : [];
+
+                // 1. Primary monophonic autocorrelation detection
+                let detectedMidi = this.detectMonophonicPitch(sampleRate);
+
+                // 2. If playing a chord and monophonic pitch didn't match, check spectral peaks for expected notes
+                if (detectedMidi === null || !expectedMidis.some(m => midiToPc(m) === midiToPc(detectedMidi))) {
+                    const specMidi = this.detectExpectedNoteInSpectrum(sampleRate, expectedMidis);
+                    if (specMidi !== null) {
+                        detectedMidi = specMidi;
+                    }
+                }
+
+                if (detectedMidi === null) {
+                    this.stableFrames = 0;
+                    this.stableCandidateMidi = null;
+                    return;
+                }
+
+                // Require 2 consecutive consistent frames (~32ms) to reject transient clicks
+                if (this.stableCandidateMidi !== null && midiToPc(detectedMidi) === midiToPc(this.stableCandidateMidi)) {
+                    this.stableFrames++;
+                } else {
+                    this.stableCandidateMidi = detectedMidi;
+                    this.stableFrames = 1;
+                }
+
+                if (this.stableFrames >= 2) {
+                    const keyInfo = KEY_SIGNATURES[AppState.rootKey] || KEY_SIGNATURES['C'];
+                    const noteName = formatPitchClass(midiToPc(detectedMidi), keyInfo.useFlats, 'fr');
+                    const octave = Math.floor(detectedMidi / 12) - 1;
+                    this.updateMicBadge(`🎙️ ${noteName}${octave}`);
+
+                    // Cooldown check: if the newly entered sub-beat expects the exact same note as the previous beat,
+                    // wait 240ms so a single sustained piano string doesn't skip two identical notes in a row
+                    const elapsedSinceAdvance = timestamp - this.lastAdvanceTimestamp;
+                    const isSameNoteAsJustAdvanced = (
+                        this.lastAdvancedMidi !== null &&
+                        midiToPc(detectedMidi) === midiToPc(this.lastAdvancedMidi)
+                    );
+                    if (elapsedSinceAdvance < 140 || (isSameNoteAsJustAdvanced && elapsedSinceAdvance < 280)) {
+                        return;
+                    }
+
+                    const didAdvance = checkWaitModeNoteMatch(detectedMidi);
+                    if (didAdvance) {
+                        this.lastAdvanceTimestamp = timestamp;
+                        this.lastAdvancedMidi = detectedMidi;
+                        this.stableFrames = 0;
+                    }
+                }
+            }
+        }
+
+        const micPitchDetector = new MicPitchDetector();
 
         // Initialize Web MIDI API if supported by browser
         function initWebMIDI() {
@@ -2980,11 +3248,19 @@
             document.getElementById('hudCurrentChord').textContent = measure.chord.symbol;
             document.getElementById('hudCurrentRoman').textContent = measure.chord.roman;
 
-            // Update MIDI Wait banner if active
+            // Update MIDI / Mic Wait banner if active
             const banner = document.getElementById('midiWaitBanner');
-            if (AppState.scrollMode === 'midi_wait') {
+            const modeLbl = document.getElementById('waitBannerModeLabel');
+            const micBadge = document.getElementById('micDetectedNoteBadge');
+            if (AppState.scrollMode === 'midi_wait' || AppState.scrollMode === 'mic_wait') {
                 banner.classList.remove('hidden');
                 banner.classList.add('flex');
+                if (modeLbl) {
+                    modeLbl.textContent = AppState.scrollMode === 'mic_wait' ? '🎙️ Jouez :' : '🎹 Attente :';
+                }
+                if (micBadge) {
+                    micBadge.classList.toggle('hidden', AppState.scrollMode !== 'mic_wait');
+                }
                 const subBeat = Math.round(AppState.currentBeatFloat * 2) / 2;
                 const expected = getExpectedSubBeatNotes(measure, subBeat);
                 const keyInfo = KEY_SIGNATURES[measure.rootKey] || KEY_SIGNATURES['C'];
@@ -3113,20 +3389,40 @@
             audioEngine.updateReverbMix(clamped / 100);
         }
 
-        // Synchronize Scroll Mode across Header and Drawer selectors
-        function setScrollMode(modeValue) {
+        // Synchronize Scroll Mode across Header, Drawer selectors, and Mic Wait quick-toggle button
+        async function setScrollMode(modeValue) {
             AppState.scrollMode = modeValue;
             const s1 = document.getElementById('selectScrollMode');
             const s2 = document.getElementById('selectScrollModeDrawer');
             if (s1 && s1.value !== modeValue) s1.value = modeValue;
             if (s2 && s2.value !== modeValue) s2.value = modeValue;
 
-            if (AppState.scrollMode === 'midi_wait') {
+            // Update quick-toggle Mic Wait button style in Header
+            const btnMic = document.getElementById('btnMicWait');
+            if (btnMic) {
+                const isMic = modeValue === 'mic_wait';
+                btnMic.className = isMic
+                    ? 'px-1.5 py-1 rounded-md text-[11px] font-medium bg-emerald-500/25 text-emerald-200 border border-emerald-400/60 transition flex items-center gap-1'
+                    : 'px-1.5 py-1 rounded-md text-[11px] font-medium text-studio-300 hover:text-parchment-100 hover:bg-studio-800 transition flex items-center gap-1';
+            }
+
+            if (AppState.scrollMode === 'midi_wait' || AppState.scrollMode === 'mic_wait') {
                 AppState.isPlaying = false;
                 document.getElementById('iconPlay').classList.remove('hidden');
                 document.getElementById('iconPause').classList.add('hidden');
                 document.getElementById('labelPlayPause').textContent = 'Lecture';
             }
+
+            if (AppState.scrollMode === 'mic_wait') {
+                const ok = await micPitchDetector.start();
+                if (!ok) {
+                    setScrollMode('continuous');
+                    return;
+                }
+            } else {
+                micPitchDetector.stop();
+            }
+
             updateHudInfo();
             renderScore();
         }
@@ -3259,7 +3555,7 @@
                 label.textContent = 'Pause';
                 AppState.lastFrameTime = performance.now();
 
-                if (AppState.scrollMode === 'midi_wait') {
+                if (AppState.scrollMode === 'midi_wait' || AppState.scrollMode === 'mic_wait') {
                     advanceOneSubBeatStep(true);
                 }
             } else {
@@ -3431,7 +3727,12 @@
                 renderScore();
             });
 
-            // Cognitive Pedagogy Controls (Look-Ahead, Ear Training, Improvisation)
+            // Cognitive Pedagogy & Mic Wait Controls (Mic Wait, Look-Ahead, Ear Training, Improvisation)
+            document.getElementById('btnMicWait').addEventListener('click', () => {
+                const nextMode = AppState.scrollMode === 'mic_wait' ? 'continuous' : 'mic_wait';
+                setScrollMode(nextMode);
+            });
+
             document.getElementById('btnLookAhead').addEventListener('click', () => {
                 const order = ['off', 'beat', 'measure'];
                 const next = order[(order.indexOf(AppState.lookAheadMode) + 1) % order.length];
