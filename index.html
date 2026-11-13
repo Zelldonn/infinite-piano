@@ -822,11 +822,18 @@
             lastFrameTime: 0,
             lastTriggeredSubBeat: -1,
 
-            // Voice-leading memory for smooth procedural generation
+            // Voice-leading & Musical Phrasing memory for smooth 8-bar composition
             lastMelodyMidi: 69,      // A4
             lastChordDegree: 0,      // 0-indexed scale degree
             lastVoicingMidis: [50, 57, 60, 64],
             generatedMeasureCounter: 0,
+            phraseState: {
+                periodIdx: -1,
+                chordDegrees: [0, 3, 1, 4, 0, 3, 4, 0],
+                motifEvents: [],     // Captured melodic-rhythmic motif [{ startBeat, durationBeats, isRest, relStep }]
+                motifTimeSig: '3/4',
+                motifAnchorMidi: 69
+            },
 
             // Active notes for MIDI Wait mode
             activeMidiNotes: new Set(),
@@ -1269,70 +1276,85 @@
             return intervals.map(semi => (keyInfo.rootPc + semi) % 12);
         }
 
-        // Markov-inspired harmonic transition table tailored for contemplative styles
+        // 8-bar Period harmonic templates: 4-bar Antecedent ("question") + 4-bar Consequent ("answer" resolving to tonic)
+        const PHRASE_ARC_TEMPLATES = {
+            gymnopedie: {
+                antecedent: [
+                    [0, 3, 0, 3],
+                    [0, 3, 1, 4],
+                    [0, 5, 3, 4],
+                    [3, 0, 1, 4]
+                ],
+                consequent: [
+                    [0, 3, 1, 0],
+                    [3, 1, 4, 0],
+                    [0, 5, 4, 0],
+                    [3, 4, 0, 0]
+                ]
+            },
+            minecraft: {
+                antecedent: [
+                    [0, 1, 3, 4],
+                    [0, 3, 5, 4],
+                    [0, 1, 0, 3]
+                ],
+                consequent: [
+                    [3, 4, 5, 0],
+                    [0, 3, 1, 0],
+                    [5, 3, 4, 0]
+                ]
+            },
+            skyrim: {
+                antecedent: [
+                    [0, 6, 3, 4],
+                    [0, 5, 2, 6],
+                    [0, 3, 6, 4]
+                ],
+                consequent: [
+                    [0, 6, 3, 0],
+                    [5, 6, 3, 0],
+                    [0, 3, 4, 0]
+                ]
+            },
+            default: {
+                antecedent: [
+                    [0, 5, 1, 4],
+                    [0, 3, 1, 4],
+                    [5, 3, 0, 4],
+                    [0, 4, 5, 3]
+                ],
+                consequent: [
+                    [0, 5, 3, 0],
+                    [1, 4, 5, 0],
+                    [5, 1, 4, 0],
+                    [3, 1, 4, 0]
+                ]
+            }
+        };
+
+        // Ensure an 8-bar musical period plan exists for measureNumber
+        function ensurePeriodPlan(measureNumber, preset) {
+            const periodIdx = Math.floor(measureNumber / 8);
+            const ps = AppState.phraseState;
+            if (ps.periodIdx === periodIdx && ps.chordDegrees.length === 8) {
+                return ps;
+            }
+            const bank = PHRASE_ARC_TEMPLATES[preset] || PHRASE_ARC_TEMPLATES.default;
+            const prevAntecedent = ps.chordDegrees.slice(0, 4).join(',');
+            const antPool = bank.antecedent.filter(a => bank.antecedent.length === 1 || a.join(',') !== prevAntecedent);
+            const ant = antPool[Math.floor(Math.random() * antPool.length)];
+            const con = bank.consequent[Math.floor(Math.random() * bank.consequent.length)];
+
+            ps.periodIdx = periodIdx;
+            ps.chordDegrees = [...ant, ...con];
+            ps.motifEvents = [];
+            return ps;
+        }
+
+        // Phrase-structured harmonic selector: resolves each 8-bar period cleanly through antecedent & consequent arcs
         function chooseNextChordDegree(prevDegree, preset, mode, measureNumber) {
-            // Every 4 measures, favor resolving or establishing tonic/subdominant
-            if (measureNumber % 4 === 0) {
-                return Math.random() < 0.65 ? 0 : 3; // I or IV
-            }
-
-            if (preset === 'gymnopedie') {
-                // Satie loves alternating I <-> IV, or ii -> V -> I, or I -> vi -> ii -> V
-                const transitions = {
-                    0: [3, 3, 1, 5],
-                    3: [0, 0, 1, 4],
-                    1: [4, 0, 3],
-                    4: [0, 3, 5],
-                    5: [1, 3, 4],
-                    2: [5, 3],
-                    6: [0, 3]
-                };
-                const choices = transitions[prevDegree] || [0, 3, 1, 4];
-                return choices[Math.floor(Math.random() * choices.length)];
-            }
-
-            if (preset === 'minecraft') {
-                // C418 Lydian/Major: I <-> II, I -> IV -> vi -> V
-                const transitions = {
-                    0: [1, 3, 5, 4],
-                    1: [0, 3, 4],
-                    3: [0, 4, 5, 1],
-                    4: [0, 3, 5],
-                    5: [3, 1, 0],
-                    2: [3, 5],
-                    6: [0, 3]
-                };
-                const choices = transitions[prevDegree] || [0, 3, 1];
-                return choices[Math.floor(Math.random() * choices.length)];
-            }
-
-            if (preset === 'skyrim') {
-                // Soule Nordic modal: i - VII - IV - i, or i - VI - III - VII
-                const transitions = {
-                    0: [6, 5, 3, 2],
-                    6: [3, 0, 5],
-                    5: [2, 3, 6],
-                    3: [0, 6, 4],
-                    2: [6, 5, 3],
-                    4: [0, 5],
-                    1: [4, 6]
-                };
-                const choices = transitions[prevDegree] || [0, 6, 3, 5];
-                return choices[Math.floor(Math.random() * choices.length)];
-            }
-
-            // Licorice / Neo-classical contemplative: ii9 - V13 - Imaj9 - vi7 - iv(borrowed)
-            const transitions = {
-                0: [5, 1, 3],
-                5: [1, 3, 4],
-                1: [4, 3],
-                4: [0, 5, 2],
-                3: [0, 4, 1],
-                2: [5, 1],
-                6: [0, 5]
-            };
-            const choices = transitions[prevDegree] || [1, 4, 0, 5];
-            return choices[Math.floor(Math.random() * choices.length)];
+            const ps = ensurePeriodPlan(measureNumber, preset);
+            return ps.chordDegrees[measureNumber % 8];
         }
 
         // Build chord structure (root, 3rd, 5th, 7th, 9th, chord symbol, Roman numeral, guide tones)
@@ -1454,38 +1476,93 @@
             };
         }
 
-        // Smooth voice-leading helper: find MIDI pitches for middle-register accompaniment (C3=48 to E4=64)
+        // Parsimonious voice-leading helper: minimizes semitone movement from prevVoicingMidis across C3–F4
         function buildSmoothLeftHandVoicing(chord, prevVoicingMidis) {
-            // Find bass root in C2 (36) to B2 (47)
-            let bassMidi = 36 + chord.rootPc;
-            if (bassMidi < 38) bassMidi += 12; // Keep bass resonant between D2 (38) and C#3 (49)
-            if (bassMidi > 49) bassMidi -= 12;
+            // Pick warm bass root in [36..50] closest to previous bass note (default around D2..C3)
+            const prevBass = (prevVoicingMidis && prevVoicingMidis.length > 0) ? prevVoicingMidis[0] : 43;
+            const bassCandidates = [];
+            for (const octBase of [36, 48]) {
+                const m = octBase + chord.rootPc;
+                if (m >= 36 && m <= 50) bassCandidates.push(m);
+            }
+            if (bassCandidates.length === 0) bassCandidates.push(36 + chord.rootPc);
+            bassCandidates.sort((a, b) => Math.abs(a - prevBass) - Math.abs(b - prevBass));
+            const bassMidi = bassCandidates[0];
 
-            // Choose 3 upper voicing notes (3rd, 5th/9th, 7th) around F3 (53) to E4 (64)
+            // Select 3 upper chord-tone pitch classes (3rd, 7th/5th, 9th/5th)
             const targetPcs = [
                 chord.thirdPc,
                 chord.seventhPc !== undefined ? chord.seventhPc : chord.fifthPc,
                 chord.ninthPc !== undefined && AppState.harmonicRichness === 'extensions' ? chord.ninthPc : chord.fifthPc
             ];
-
-            // Ensure unique pitch classes
             const uniquePcs = [...new Set(targetPcs)];
             while (uniquePcs.length < 3) {
                 uniquePcs.push(chord.rootPc);
             }
+            const pcs3 = uniquePcs.slice(0, 3);
 
-            const centerMidi = 57; // A3 warm felt register
-            const upperMidis = uniquePcs.slice(0, 3).map(pc => {
-                // Find pitch class closest to centerMidi
-                let candidate = 48 + pc;
-                while (candidate < centerMidi - 5) candidate += 12;
-                while (candidate > centerMidi + 6) candidate -= 12;
-                return candidate;
-            }).sort((a, b) => a - b);
+            const minUpper = Math.max(48, bassMidi + 5); // Stay clear of low muddy intervals above bass
+            const maxUpper = 67; // G4 (allows smooth upper 9th extensions without ceiling jump)
+            const prevUpper = (prevVoicingMidis && prevVoicingMidis.length >= 4)
+                ? prevVoicingMidis.slice(1, 4)
+                : [55, 59, 62];
+
+            // For each pitch class, enumerate valid pitches in [minUpper..maxUpper]
+            const candidatesPerPc = pcs3.map((pc) => {
+                const list = [];
+                for (let oct = 3; oct <= 5; oct++) {
+                    const m = (oct + 1) * 12 + pc;
+                    if (m >= minUpper && m <= maxUpper) list.push(m);
+                }
+                if (list.length === 0) list.push(55 + pc);
+                return list;
+            });
+
+            // Exhaustively score permutations to minimize total semitone movement while keeping voices uncluttered
+            const perms = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
+            let bestUpper = null;
+            let bestCost = Infinity;
+
+            for (const p of perms) {
+                const chosen = [0, 1, 2].map((slotIdx) => {
+                    const pcOpts = candidatesPerPc[p[slotIdx]];
+                    let bestM = pcOpts[0];
+                    let bestD = Infinity;
+                    for (const m of pcOpts) {
+                        const d = Math.abs(m - prevUpper[slotIdx]);
+                        if (d < bestD) { bestD = d; bestM = m; }
+                    }
+                    return bestM;
+                }).sort((a, b) => a - b);
+
+                // Penalize unison overlaps or overly wide 1-hand spans (>14 semis)
+                if (chosen[0] === chosen[1] || chosen[1] === chosen[2]) continue;
+                const span = chosen[2] - chosen[0];
+                if (span > 14) continue;
+
+                const motionCost = Math.abs(chosen[0] - prevUpper[0])
+                    + Math.abs(chosen[1] - prevUpper[1])
+                    + Math.abs(chosen[2] - prevUpper[2]);
+                const centerPenalty = Math.abs(((chosen[0] + chosen[2]) / 2) - 58) * 0.25;
+                const totalCost = motionCost + centerPenalty;
+                if (totalCost < bestCost) {
+                    bestCost = totalCost;
+                    bestUpper = chosen;
+                }
+            }
+
+            if (!bestUpper) {
+                bestUpper = pcs3.map((pc) => {
+                    let c = 48 + pc;
+                    while (c < minUpper) c += 12;
+                    while (c > maxUpper) c -= 12;
+                    return c;
+                }).sort((a, b) => a - b);
+            }
 
             return {
                 bassMidi,
-                upperMidis
+                upperMidis: bestUpper
             };
         }
 
@@ -1523,6 +1600,12 @@
             const lhPattern = AppState.leftHandPattern;
             const rhDensity = Number(AppState.rightHandDensity);
 
+            const periodIndex = Math.floor(measureIndex / 8);
+            const barInPeriod = measureIndex % 8;
+            const isHalfCadenceBar = (barInPeriod === 3);
+            const isFullCadenceBar = (barInPeriod === 7);
+            const isCadenceBar = isHalfCadenceBar || isFullCadenceBar;
+
             const pedFlags = computePedagogyFlagsForMeasureIndex(measureIndex);
             const nextPedFlags = computePedagogyFlagsForMeasureIndex(measureIndex + 1);
             const nextWillModulate = (AppState.progressiveModulation && ((measureIndex + 1) % 8 === 0));
@@ -1536,16 +1619,19 @@
                 !prevMeas.isEarTraining && !prevMeas.isImprovisation && !willModulateNow
             ) ? [...prevLastRh.notes] : null;
 
+            // Prevent ties from blurring major/sub-phrase openings (bars 0, 2, 4 in period)
+            const isSubPhraseBoundary = (barInPeriod === 1 || barInPeriod === 3 || barInPeriod === 7);
+
             const allowOutgoingTie = (
+                !isSubPhraseBoundary &&
                 !pedFlags.isEarTraining && !pedFlags.isImprovisation &&
                 !nextPedFlags.isEarTraining && !nextPedFlags.isImprovisation &&
                 !nextWillModulate
             );
 
-            // Pick next chord degree via Markov table
-            const nextDegree = measureIndex === 0
-                ? 0
-                : chooseNextChordDegree(AppState.lastChordDegree, AppState.activePreset, mode, measureIndex);
+            // Select next chord degree from the active 8-bar period arc (call on measure 0 too so periodIdx initializes cleanly)
+            const periodDegree = chooseNextChordDegree(AppState.lastChordDegree, AppState.activePreset, mode, measureIndex);
+            const nextDegree = measureIndex === 0 ? 0 : periodDegree;
             AppState.lastChordDegree = nextDegree;
 
             const chord = buildContemplativeChord(rootKey, mode, nextDegree, richness, AppState.activePreset);
@@ -1694,8 +1780,22 @@
                 }
             }
 
-            // Helper to pick next lyrical melody note with controlled interval leap
-            const pickNextMelodyNote = (preferChordTone = false) => {
+            // 8-bar period melodic arch: gently opens -> rises in bar 2 -> relaxes at half-cadence bar 3 -> peaks in bar 5 -> resolves home in bar 7
+            const PHRASE_CONTOUR_RATIO = [0.42, 0.50, 0.58, 0.48, 0.62, 0.78, 0.64, 0.36];
+            const phraseTargetMidi = scaleMidis[Math.min(scaleMidis.length - 1, Math.max(0, Math.round((scaleMidis.length - 1) * PHRASE_CONTOUR_RATIO[barInPeriod])))];
+
+            const findClosestScaleIdx = (midi) => {
+                let bestIdx = 0;
+                let bestDiff = Infinity;
+                for (let k = 0; k < scaleMidis.length; k++) {
+                    const d = Math.abs(scaleMidis[k] - midi);
+                    if (d < bestDiff) { bestDiff = d; bestIdx = k; }
+                }
+                return bestIdx;
+            };
+
+            // Helper to pick next lyrical melody note guided by phrase contour & conjunct motion
+            const pickNextMelodyNote = (preferChordTone = false, preferTonicResolution = false) => {
                 let maxSemis = 5;
                 if (AppState.intervalLeap === 'stepwise') maxSemis = 4;
                 if (AppState.intervalLeap === 'moderate') maxSemis = 7;
@@ -1704,18 +1804,32 @@
                 let candidates = scaleMidis.filter(m => Math.abs(m - AppState.lastMelodyMidi) <= maxSemis);
                 if (candidates.length === 0) candidates = scaleMidis;
 
-                if (preferChordTone) {
+                if (preferTonicResolution) {
+                    const tonicPool = candidates.filter(m => midiToPc(m) === chord.rootPc);
+                    const thirdPool = candidates.filter(m => midiToPc(m) === chord.thirdPc);
+                    if (tonicPool.length > 0) candidates = tonicPool;
+                    else if (thirdPool.length > 0) candidates = thirdPool;
+                } else if (preferChordTone) {
                     const chordCandidates = candidates.filter(m => chord.chordPcs.includes(midiToPc(m)));
                     if (chordCandidates.length > 0) candidates = chordCandidates;
                 }
 
-                // Slight tendency to avoid repeating the exact same note 3 times in a row
-                const nonRepeat = candidates.filter(m => m !== AppState.lastMelodyMidi);
-                const pool = (nonRepeat.length > 0 && Math.random() < 0.8) ? nonRepeat : candidates;
+                let bestNote = candidates[0];
+                let bestScore = -Infinity;
+                for (const m of candidates) {
+                    const stepDist = Math.abs(m - AppState.lastMelodyMidi);
+                    const contourPull = -Math.abs(m - phraseTargetMidi) * 0.45;
+                    const conjunctBonus = (stepDist >= 1 && stepDist <= 4) ? 3.2 : 0;
+                    const repeatPenalty = (m === AppState.lastMelodyMidi) ? -2.6 : 0;
+                    const score = contourPull + conjunctBonus + repeatPenalty + Math.random() * 2.2;
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestNote = m;
+                    }
+                }
 
-                const chosen = pool[Math.floor(Math.random() * pool.length)];
-                AppState.lastMelodyMidi = chosen;
-                return chosen;
+                AppState.lastMelodyMidi = bestNote;
+                return bestNote;
             };
 
             const buildRhNoteArray = (mainNote) => {
@@ -1730,10 +1844,66 @@
                 return notes;
             };
 
-            if (isSixEight) {
+            // Attempt transposed call-and-response / sequence replay of Bar 0 motif on Bar 2 and Bar 4
+            const ps = AppState.phraseState;
+            let usedMotifRecall = false;
+            if (
+                (barInPeriod === 2 || barInPeriod === 4) &&
+                !incomingTieNotes &&
+                ps.motifEvents.length > 0 &&
+                ps.motifTimeSig === timeSig
+            ) {
+                const approxAnchorTarget = barInPeriod === 2
+                    ? (ps.motifAnchorMidi + (Math.random() < 0.75 ? 3 : -2))
+                    : phraseTargetMidi;
+                const chordToneMidis = scaleMidis.filter(m => chord.chordPcs.includes(midiToPc(m)));
+                let startNote = scaleMidis[findClosestScaleIdx(approxAnchorTarget)];
+                if (chordToneMidis.length > 0) {
+                    let bestD = Infinity;
+                    for (const m of chordToneMidis) {
+                        const d = Math.abs(m - approxAnchorTarget);
+                        if (d < bestD) { bestD = d; startNote = m; }
+                    }
+                }
+                const anchorIdx = findClosestScaleIdx(startNote);
+                const lastNoteSlotIdx = ps.motifEvents.reduce((acc, ev, idx) => (ev.isRest ? acc : idx), -1);
+
+                for (let idx = 0; idx < ps.motifEvents.length; idx++) {
+                    const mEv = ps.motifEvents[idx];
+                    if (mEv.isRest) {
+                        rhEvents.push({
+                            startBeat: mEv.startBeat,
+                            durationBeats: mEv.durationBeats,
+                            notes: [],
+                            isRest: true
+                        });
+                        continue;
+                    }
+                    let noteIdx = Math.max(0, Math.min(scaleMidis.length - 1, anchorIdx + mEv.relStep));
+                    if (idx === lastNoteSlotIdx) {
+                        // Gently resolve the motif tail onto a tone of the current bar's chord
+                        const neighborIdxs = [noteIdx, Math.max(0, noteIdx - 1), Math.min(scaleMidis.length - 1, noteIdx + 1)];
+                        const chordMatch = neighborIdxs.find(k => chord.chordPcs.includes(midiToPc(scaleMidis[k])));
+                        if (chordMatch !== undefined) noteIdx = chordMatch;
+                    }
+                    const noteMidi = scaleMidis[noteIdx];
+                    AppState.lastMelodyMidi = noteMidi;
+                    rhEvents.push({
+                        startBeat: mEv.startBeat,
+                        durationBeats: mEv.durationBeats,
+                        notes: mEv.wasChordal ? buildRhNoteArray(noteMidi) : [noteMidi],
+                        isRest: false
+                    });
+                }
+                usedMotifRecall = true;
+            }
+
+            if (usedMotifRecall) {
+                // Motif sequence cleanly populated rhEvents
+            } else if (isSixEight) {
                 // Compound 6/8 melody shaped in two 1.5-beat compound pulses
-                if (rhDensity === 1 && !incomingTieNotes && Math.random() < 0.45) {
-                    const mainNote = pickNextMelodyNote(true);
+                if ((rhDensity === 1 || isFullCadenceBar) && !incomingTieNotes && Math.random() < (isFullCadenceBar ? 0.65 : 0.45)) {
+                    const mainNote = pickNextMelodyNote(true, isFullCadenceBar);
                     rhEvents.push({
                         startBeat: 0,
                         durationBeats: 3,
@@ -1755,16 +1925,16 @@
                             continue;
                         }
 
-                        // Occasional compound breathing rest on 2nd compound beat
-                        if (cStart === 1.5 && Math.random() < (AppState.activePreset === 'minecraft' ? 0.22 : 0.12)) {
+                        // Breathing rest on final pulse of cadence bars or quiet Minecraft measures
+                        if (cStart === 1.5 && ((isCadenceBar && Math.random() < 0.30) || (!isCadenceBar && Math.random() < (AppState.activePreset === 'minecraft' ? 0.22 : 0.10)))) {
                             rhEvents.push({ startBeat: 1.5, durationBeats: 1.5, notes: [], isRest: true });
                             continue;
                         }
 
-                        if (rhDensity === 3 && Math.random() < 0.52) {
+                        if (!isCadenceBar && rhDensity === 3 && Math.random() < 0.52) {
                             // True 3-eighth compound group
                             for (let k = 0; k < 3; k++) {
-                                const n = pickNextMelodyNote(cStart === 0 && k === 0);
+                                const n = pickNextMelodyNote(cStart === 0 && k === 0, false);
                                 rhEvents.push({
                                     startBeat: cStart + k * 0.5,
                                     durationBeats: 0.5,
@@ -1772,16 +1942,16 @@
                                     isRest: false
                                 });
                             }
-                        } else if (rhDensity >= 2 && Math.random() < (rhDensity === 2 ? 0.45 : 0.35)) {
+                        } else if (!(isCadenceBar && cStart === 1.5) && rhDensity >= 2 && Math.random() < (rhDensity === 2 ? 0.45 : 0.35)) {
                             // Classic 6/8 quarter + eighth lilt (1.0 + 0.5)
-                            const n1 = pickNextMelodyNote(cStart === 0);
+                            const n1 = pickNextMelodyNote(cStart === 0, false);
                             rhEvents.push({
                                 startBeat: cStart,
                                 durationBeats: 1,
                                 notes: buildRhNoteArray(n1),
                                 isRest: false
                             });
-                            const n2 = pickNextMelodyNote(false);
+                            const n2 = pickNextMelodyNote(false, false);
                             rhEvents.push({
                                 startBeat: cStart + 1,
                                 durationBeats: 0.5,
@@ -1789,8 +1959,8 @@
                                 isRest: false
                             });
                         } else {
-                            // Dotted quarter note
-                            const mainNote = pickNextMelodyNote(cStart === 0);
+                            // Dotted quarter resolution (preferred on cadence endings)
+                            const mainNote = pickNextMelodyNote(cStart === 0 || isCadenceBar, isFullCadenceBar && cStart === 1.5);
                             rhEvents.push({
                                 startBeat: cStart,
                                 durationBeats: 1.5,
@@ -1822,8 +1992,27 @@
                         continue;
                     }
 
-                    // Intentional breathing rest in Minecraft / Level 2
-                    if (beatCursor > 0 && remaining >= 1 && Math.random() < (AppState.activePreset === 'minecraft' ? 0.25 : 0.14)) {
+                    // Cadence closing behavior on bar 4 / bar 8: sustain final chord/tonic tone or breathe with a rest
+                    if (isCadenceBar && remaining <= 2 && beatCursor > 0) {
+                        if (isFullCadenceBar && remaining === 1 && Math.random() < 0.42) {
+                            rhEvents.push({ startBeat: beatCursor, durationBeats: 1, notes: [], isRest: true });
+                            beatCursor += 1;
+                            continue;
+                        }
+                        const cadNote = pickNextMelodyNote(true, isFullCadenceBar);
+                        rhEvents.push({
+                            startBeat: beatCursor,
+                            durationBeats: remaining,
+                            notes: buildRhNoteArray(cadNote),
+                            isRest: false,
+                            tieToNext: false
+                        });
+                        beatCursor += remaining;
+                        continue;
+                    }
+
+                    // Intentional breathing rest (more likely at phrase breath or in Minecraft mode)
+                    if (beatCursor > 0 && remaining >= 1 && Math.random() < (AppState.activePreset === 'minecraft' ? 0.24 : 0.12)) {
                         rhEvents.push({
                             startBeat: beatCursor,
                             durationBeats: 1,
@@ -1836,26 +2025,22 @@
 
                     let dur = 1;
                     if (rhDensity === 1) {
-                        // Calm half notes, dotted half notes, or whole notes
                         if (remaining >= 3 && beatsPerMeasure === 3) dur = 3;
                         else if (remaining >= 2) dur = 2;
                         else dur = 1;
                     } else if (rhDensity === 2) {
-                        // Lyrical quarter notes and half notes
                         if (remaining >= 2 && Math.random() < 0.42) dur = 2;
                         else dur = 1;
                     } else if (rhDensity === 3) {
-                        // Flowing eighth notes mixed with quarters
                         if (remaining >= 1 && Math.random() < 0.48) {
-                            // Pair of eighth notes
-                            const n1 = pickNextMelodyNote(beatCursor === 0);
+                            const n1 = pickNextMelodyNote(beatCursor === 0, false);
                             rhEvents.push({
                                 startBeat: beatCursor,
                                 durationBeats: 0.5,
                                 notes: [n1],
                                 isRest: false
                             });
-                            const n2 = pickNextMelodyNote(false);
+                            const n2 = pickNextMelodyNote(false, false);
                             rhEvents.push({
                                 startBeat: beatCursor + 0.5,
                                 durationBeats: 0.5,
@@ -1868,11 +2053,10 @@
                             dur = (remaining >= 2 && Math.random() < 0.25) ? 2 : 1;
                         }
                     } else if (rhDensity === 4) {
-                        // Polyphonic melody: harmonized in 3rds or 6ths
                         dur = (remaining >= 2 && Math.random() < 0.45) ? 2 : 1;
                     }
 
-                    const mainNote = pickNextMelodyNote(beatCursor === 0);
+                    const mainNote = pickNextMelodyNote(beatCursor === 0, isFullCadenceBar && beatCursor + dur >= beatsPerMeasure);
                     const notes = buildRhNoteArray(mainNote);
 
                     rhEvents.push({
@@ -1884,6 +2068,30 @@
                     });
 
                     beatCursor += dur;
+                }
+            }
+
+            // Capture Bar 0 motif shape (relative diatonic intervals + rhythm) for Bars 2 & 4 call-and-response
+            if (barInPeriod === 0 && !incomingTieNotes) {
+                const firstPitched = rhEvents.find(e => !e.isRest && e.notes.length > 0);
+                if (firstPitched) {
+                    const firstNoteMidi = firstPitched.notes[firstPitched.notes.length - 1];
+                    const anchorIdx = findClosestScaleIdx(firstNoteMidi);
+                    ps.motifAnchorMidi = firstNoteMidi;
+                    ps.motifTimeSig = timeSig;
+                    ps.motifEvents = rhEvents.map(ev => {
+                        if (ev.isRest || ev.notes.length === 0) {
+                            return { startBeat: ev.startBeat, durationBeats: ev.durationBeats, isRest: true, relStep: 0, wasChordal: false };
+                        }
+                        const leadMidi = ev.notes[ev.notes.length - 1];
+                        return {
+                            startBeat: ev.startBeat,
+                            durationBeats: ev.durationBeats,
+                            isRest: false,
+                            relStep: findClosestScaleIdx(leadMidi) - anchorIdx,
+                            wasChordal: ev.notes.length > 1
+                        };
+                    });
                 }
             }
 
@@ -1905,6 +2113,8 @@
 
             return {
                 index: measureIndex,
+                periodIndex,
+                barInPeriod,
                 rootKey,
                 mode,
                 timeSig,
@@ -1968,7 +2178,10 @@
             AppState.lastTriggeredSubBeat = -1;
             AppState.lastChordDegree = 0;
             AppState.lastMelodyMidi = 69;
+            AppState.lastVoicingMidis = [50, 57, 60, 64];
             AppState.generationRootKey = AppState.rootKey;
+            AppState.phraseState.periodIdx = -1;
+            AppState.phraseState.motifEvents = [];
 
             for (let i = 0; i < 16; i++) {
                 AppState.measures.push(generateNextMeasure());
@@ -1992,6 +2205,8 @@
             AppState.measures = AppState.measures.slice(0, keepUntil);
             AppState.generatedMeasureCounter = keepUntil;
             AppState.generationRootKey = AppState.rootKey;
+            AppState.phraseState.periodIdx = -1;
+            AppState.phraseState.motifEvents = [];
             ensureInfiniteBuffer();
             updateHeaderSummary();
             updateHudInfo();
@@ -2793,14 +3008,23 @@
                 ctx.restore();
             }
 
-            // 6. Measure ending barline
+            // 6. Measure ending barline (double thin barline on 8-bar period cadence boundary)
             ctx.save();
             ctx.strokeStyle = palette.staffLine;
             ctx.lineWidth = 1.25;
-            ctx.beginPath();
-            ctx.moveTo(measX + measWidth, trebleTopY);
-            ctx.lineTo(measX + measWidth, bassTopY + staffHeight);
-            ctx.stroke();
+            if (measure.barInPeriod === 7) {
+                for (const dx of [-3.5, 0]) {
+                    ctx.beginPath();
+                    ctx.moveTo(measX + measWidth + dx, trebleTopY);
+                    ctx.lineTo(measX + measWidth + dx, bassTopY + staffHeight);
+                    ctx.stroke();
+                }
+            } else {
+                ctx.beginPath();
+                ctx.moveTo(measX + measWidth, trebleTopY);
+                ctx.lineTo(measX + measWidth, bassTopY + staffHeight);
+                ctx.stroke();
+            }
             ctx.restore();
         }
 
