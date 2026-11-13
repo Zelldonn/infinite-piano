@@ -1,0 +1,39 @@
+{
+  "name": "L'Atelier Contemplatif — Déchiffrage Piano Infini",
+  "short_name": "Atelier Piano",
+  "description": "Générateur contemplatif infini de lecture à vue et entraînement cognitif au piano (Regard en avance, Oreille musicale, Improvisation, Micro & MIDI).",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#12100e",
+  "theme_color": "#171513",
+  "lang": "fr",
+  "categories": ["music", "education"],
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "./icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
