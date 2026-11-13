@@ -51,6 +51,16 @@
     </script>
 
     <style>
+        /* Dedicated SMuFL Classical Piano Notation Font (Steinberg Bravura) */
+        @font-face {
+            font-family: 'Bravura';
+            src: url('./Bravura.woff2') format('woff2'),
+                 url('https://cdn.jsdelivr.net/npm/@vexflow-fonts/bravura@1.0.2/bravura.woff2') format('woff2');
+            font-weight: normal;
+            font-style: normal;
+            font-display: block;
+        }
+
         /* Custom styling for scrollbars, sliders, and responsive smartphone landscape canvas */
         * {
             box-sizing: border-box;
@@ -1958,11 +1968,42 @@
             ctx.restore();
         }
 
+        // Steinberg Bravura SMuFL (Standard Music Font Layout) codepoints (1 em = 4 * lineGap)
+        const SMUFL = {
+            gClef: '\uE050',              // Anchored on G4 line (trebleTopY + lineGap * 3)
+            fClef: '\uE062',              // Anchored on F3 line (bassTopY + lineGap * 1)
+            noteheadWhole: '\uE0A2',      // Ronde (4 beats)
+            noteheadHalf: '\uE0A3',       // Blanche (2-3 beats)
+            noteheadBlack: '\uE0A4',      // Noire / Croche (<= 1.5 beats)
+            noteheadDiamondHalf: '\uE0DB',// Hollow diamond notehead for Guided Improvisation
+            flag8thUp: '\uE240',          // Eighth-note flag up (anchored at stem top)
+            flag8thDown: '\uE241',        // Eighth-note flag down (anchored at stem bottom)
+            accidentalFlat: '\uE260',     // Flat (♭) vertically centered at y
+            accidentalNatural: '\uE261',  // Natural (♮) vertically centered at y
+            accidentalSharp: '\uE262',    // Sharp (♯) vertically centered at y
+            restHalf: '\uE4E4',           // Half rest sitting on middle staff line
+            restQuarter: '\uE4E5',        // Quarter rest (Soupir) centered on middle staff line
+            rest8th: '\uE4E6',            // Eighth rest (Demi-soupir) centered on middle staff line
+            timeSigDigit: (d) => String.fromCodePoint(0xE080 + (Number(d) || 0)),
+            accidentalFromSymbol: (sym) => {
+                if (sym === '♯' || sym === '#') return '\uE262';
+                if (sym === '♭' || sym === 'b') return '\uE260';
+                if (sym === '♮') return '\uE261';
+                return sym;
+            }
+        };
+
+        function isBravuraLoaded() {
+            return Boolean(document.fonts && document.fonts.check && document.fonts.check('36px Bravura'));
+        }
+
         // Draw authentic Engraved Grand Staff Brace (Accolade), Treble Clef, Bass Clef, Key Signature, and Time Signature
         function drawSystemHeader(ctx, x, trebleTopY, bassTopY, lineGap, rootKey, timeSig, palette, isCompact = false) {
             const staffHeight = lineGap * 4;
             const bottomY = bassTopY + staffHeight;
             const totalGrandHeight = bottomY - trebleTopY;
+            const useBravura = isBravuraLoaded();
+            const smuflFont = `${(lineGap * 4).toFixed(1)}px Bravura, serif`;
 
             ctx.save();
             ctx.strokeStyle = palette.ink;
@@ -2004,18 +2045,24 @@
             ctx.closePath();
             ctx.fill();
 
-            // 3. Treble Clef (𝄞) & Bass Clef (𝄢) with crisp classical engraving proportions
-            ctx.font = `${Math.round(lineGap * 4.85)}px "Cormorant Garamond", Georgia, serif`;
-            ctx.fillText('𝄞', x + (isCompact ? 5 : 8), trebleTopY + lineGap * 3.58);
+            // 3. Treble Clef (gClef \uE050) & Bass Clef (fClef \uE062) using Bravura SMuFL font
+            if (useBravura) {
+                ctx.font = smuflFont;
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'alphabetic';
+                ctx.fillText(SMUFL.gClef, x + (isCompact ? 5 : 7), trebleTopY + lineGap * 3);
+                ctx.fillText(SMUFL.fClef, x + (isCompact ? 5 : 7), bassTopY + lineGap * 1);
+            } else {
+                ctx.font = `${Math.round(lineGap * 4.85)}px "Cormorant Garamond", Georgia, serif`;
+                ctx.fillText('𝄞', x + (isCompact ? 5 : 8), trebleTopY + lineGap * 3.58);
+                ctx.font = `${Math.round(lineGap * 3.75)}px "Cormorant Garamond", Georgia, serif`;
+                ctx.fillText('𝄢', x + (isCompact ? 6 : 9), bassTopY + lineGap * 2.98);
+            }
 
-            ctx.font = `${Math.round(lineGap * 3.75)}px "Cormorant Garamond", Georgia, serif`;
-            ctx.fillText('𝄢', x + (isCompact ? 6 : 9), bassTopY + lineGap * 2.98);
-
-            // Key Signature accidentals with non-overlapping spacing
-            let cursorX = x + (isCompact ? 35 : 45);
-            const accStepX = isCompact ? 9.5 : 11.5;
+            // 4. Key Signature accidentals with non-overlapping spacing
+            let cursorX = x + (isCompact ? 36 : 45);
+            const accStepX = isCompact ? 9.5 : 11.2;
             const keyInfo = KEY_SIGNATURES[rootKey] || KEY_SIGNATURES['C'];
-            ctx.font = `600 ${Math.round(lineGap * 1.85)}px "Cormorant Garamond", Georgia, serif`;
 
             // Sharp positions (step from C4) on Treble: F5(10), C5(7), G5(11), D5(8)
             const trebleSharpSteps = [10, 7, 11, 8];
@@ -2028,29 +2075,58 @@
                 for (let i = 0; i < keyInfo.sharps; i++) {
                     const ty = stepToStaffY(trebleSharpSteps[i], true, trebleTopY, lineGap);
                     const by = stepToStaffY(bassSharpSteps[i], false, bassTopY, lineGap);
-                    drawHaloText(ctx, '♯', cursorX, ty + lineGap * 0.55, palette.ink, palette.bg, 2.2);
-                    drawHaloText(ctx, '♯', cursorX, by + lineGap * 0.55, palette.ink, palette.bg, 2.2);
+                    if (useBravura) {
+                        ctx.font = smuflFont;
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'alphabetic';
+                        drawHaloText(ctx, SMUFL.accidentalSharp, cursorX, ty, palette.ink, palette.bg, 2.0);
+                        drawHaloText(ctx, SMUFL.accidentalSharp, cursorX, by, palette.ink, palette.bg, 2.0);
+                    } else {
+                        ctx.font = `600 ${Math.round(lineGap * 1.85)}px "Cormorant Garamond", Georgia, serif`;
+                        drawHaloText(ctx, '♯', cursorX, ty + lineGap * 0.55, palette.ink, palette.bg, 2.2);
+                        drawHaloText(ctx, '♯', cursorX, by + lineGap * 0.55, palette.ink, palette.bg, 2.2);
+                    }
                     cursorX += accStepX;
                 }
             } else if (keyInfo.flats > 0) {
                 for (let i = 0; i < keyInfo.flats; i++) {
                     const ty = stepToStaffY(trebleFlatSteps[i], true, trebleTopY, lineGap);
                     const by = stepToStaffY(bassFlatSteps[i], false, bassTopY, lineGap);
-                    drawHaloText(ctx, '♭', cursorX, ty + lineGap * 0.52, palette.ink, palette.bg, 2.2);
-                    drawHaloText(ctx, '♭', cursorX, by + lineGap * 0.52, palette.ink, palette.bg, 2.2);
+                    if (useBravura) {
+                        ctx.font = smuflFont;
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'alphabetic';
+                        drawHaloText(ctx, SMUFL.accidentalFlat, cursorX, ty, palette.ink, palette.bg, 2.0);
+                        drawHaloText(ctx, SMUFL.accidentalFlat, cursorX, by, palette.ink, palette.bg, 2.0);
+                    } else {
+                        ctx.font = `600 ${Math.round(lineGap * 1.85)}px "Cormorant Garamond", Georgia, serif`;
+                        drawHaloText(ctx, '♭', cursorX, ty + lineGap * 0.52, palette.ink, palette.bg, 2.2);
+                        drawHaloText(ctx, '♭', cursorX, by + lineGap * 0.52, palette.ink, palette.bg, 2.2);
+                    }
                     cursorX += accStepX;
                 }
             }
 
-            // Engraved Time Signature numerals
-            cursorX += isCompact ? 7 : 10;
+            // 5. Engraved Time Signature numerals (SMuFL \uE080-\uE089)
+            cursorX += isCompact ? 8 : 11;
             const [num, den] = timeSig.split('/');
-            ctx.font = `700 ${Math.round(lineGap * 2.38)}px "Cormorant Garamond", Georgia, serif`;
             ctx.textAlign = 'center';
-            drawHaloText(ctx, num, cursorX + 7, trebleTopY + lineGap * 1.88, palette.ink, palette.bg, 2.5);
-            drawHaloText(ctx, den, cursorX + 7, trebleTopY + lineGap * 3.88, palette.ink, palette.bg, 2.5);
-            drawHaloText(ctx, num, cursorX + 7, bassTopY + lineGap * 1.88, palette.ink, palette.bg, 2.5);
-            drawHaloText(ctx, den, cursorX + 7, bassTopY + lineGap * 3.88, palette.ink, palette.bg, 2.5);
+            ctx.textBaseline = 'alphabetic';
+            if (useBravura) {
+                ctx.font = smuflFont;
+                const numGlyph = SMUFL.timeSigDigit(num);
+                const denGlyph = SMUFL.timeSigDigit(den);
+                drawHaloText(ctx, numGlyph, cursorX + 7, trebleTopY + lineGap * 1, palette.ink, palette.bg, 2.2);
+                drawHaloText(ctx, denGlyph, cursorX + 7, trebleTopY + lineGap * 3, palette.ink, palette.bg, 2.2);
+                drawHaloText(ctx, numGlyph, cursorX + 7, bassTopY + lineGap * 1, palette.ink, palette.bg, 2.2);
+                drawHaloText(ctx, denGlyph, cursorX + 7, bassTopY + lineGap * 3, palette.ink, palette.bg, 2.2);
+            } else {
+                ctx.font = `700 ${Math.round(lineGap * 2.38)}px "Cormorant Garamond", Georgia, serif`;
+                drawHaloText(ctx, num, cursorX + 7, trebleTopY + lineGap * 1.88, palette.ink, palette.bg, 2.5);
+                drawHaloText(ctx, den, cursorX + 7, trebleTopY + lineGap * 3.88, palette.ink, palette.bg, 2.5);
+                drawHaloText(ctx, num, cursorX + 7, bassTopY + lineGap * 1.88, palette.ink, palette.bg, 2.5);
+                drawHaloText(ctx, den, cursorX + 7, bassTopY + lineGap * 3.88, palette.ink, palette.bg, 2.5);
+            }
 
             ctx.restore();
             return cursorX + (isCompact ? 22 : 28);
@@ -2436,6 +2512,8 @@
             const keyInfo = KEY_SIGNATURES[measure.rootKey] || KEY_SIGNATURES['C'];
             const guideMidis = measure.improGuideMidis || [62, 65, 69, 72];
             const count = guideMidis.length;
+            const useBravura = isBravuraLoaded();
+            const smuflFont = `${(lineGap * 4).toFixed(1)}px Bravura, serif`;
 
             // Check if Look-Ahead masking should fade this measure
             const isMeasureMasked = (
@@ -2468,34 +2546,49 @@
                 // Draw ledger lines if needed
                 drawLedgerLines(ctx, x, [{ midi, ...info, y, noteX: x }], true, staffTopY, lineGap, palette);
 
-                // Draw hollow diamond notehead (◆)
-                const dx = lineGap * 0.70;
+                const dx = lineGap * 0.65;
                 const dy = lineGap * 0.50;
                 const color = isGuide ? palette.guideTone : palette.rhHighlight;
 
-                ctx.fillStyle = AppState.sheetTheme === 'dark' ? 'rgba(245, 158, 11, 0.22)' : 'rgba(217, 119, 6, 0.15)';
-                ctx.strokeStyle = color;
-                ctx.lineWidth = 1.9;
-
-                ctx.beginPath();
-                ctx.moveTo(x, y - dy);
-                ctx.lineTo(x + dx, y);
-                ctx.lineTo(x, y + dy);
-                ctx.lineTo(x - dx, y);
-                ctx.closePath();
-                ctx.fill();
-                ctx.stroke();
+                // Draw SMuFL hollow diamond notehead (\uE0DB) when Bravura is loaded, with fallback vector diamond
+                if (useBravura) {
+                    ctx.font = smuflFont;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'alphabetic';
+                    ctx.fillStyle = color;
+                    ctx.fillText(SMUFL.noteheadDiamondHalf, x, y);
+                } else {
+                    ctx.fillStyle = AppState.sheetTheme === 'dark' ? 'rgba(245, 158, 11, 0.22)' : 'rgba(217, 119, 6, 0.15)';
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 1.9;
+                    ctx.beginPath();
+                    ctx.moveTo(x, y - dy);
+                    ctx.lineTo(x + dx, y);
+                    ctx.lineTo(x, y + dy);
+                    ctx.lineTo(x - dx, y);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+                }
 
                 // Accidental if any
                 if (info.accidental) {
-                    ctx.font = `600 ${Math.round(lineGap * 1.75)}px "Cormorant Garamond", Georgia, serif`;
-                    drawHaloText(ctx, info.accidental, x - dx - lineGap * 0.95, y + lineGap * 0.48, color, palette.bg, 2.5);
+                    if (useBravura) {
+                        ctx.font = smuflFont;
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'alphabetic';
+                        drawHaloText(ctx, SMUFL.accidentalFromSymbol(info.accidental), x - dx - lineGap * 0.72, y, color, palette.bg, 2.2);
+                    } else {
+                        ctx.font = `600 ${Math.round(lineGap * 1.75)}px "Cormorant Garamond", Georgia, serif`;
+                        drawHaloText(ctx, info.accidental, x - dx - lineGap * 0.95, y + lineGap * 0.48, color, palette.bg, 2.5);
+                    }
                 }
 
                 // Always show note name + role (★ for Guide Tone) cleanly above the diamond with paper halo
                 const noteName = formatPitchClass(info.pc, keyInfo.useFlats, AppState.noteNameMode === 'en' ? 'en' : 'fr');
                 const roleTag = isGuide ? '★' : '';
                 ctx.font = `italic 600 ${Math.max(10, Math.round(lineGap * 1.05))}px "Cormorant Garamond", Georgia, serif`;
+                ctx.textAlign = 'left';
                 drawHaloText(ctx, `${noteName}${roleTag}`, x - 7, y - dy - lineGap * 0.55, color, palette.bg, 2.8);
 
                 ctx.restore();
@@ -2504,14 +2597,25 @@
             ctx.restore();
         }
 
-        // Draw an authentic SMuFL / Bravura / Henle engraved notehead (Quarter/Eighth solid, Half calligraphic hollow, Whole hollow)
-        function drawEngravedNotehead(ctx, x, y, rx, ry, durationBeats, fillColor) {
+        // Draw an authentic Steinberg Bravura SMuFL notehead (\uE0A2 Whole, \uE0A3 Half, \uE0A4 Quarter/Eighth)
+        function drawEngravedNotehead(ctx, x, y, rx, ry, durationBeats, fillColor, lineGap) {
             ctx.save();
             ctx.fillStyle = fillColor;
             ctx.strokeStyle = fillColor;
 
+            if (isBravuraLoaded() && lineGap) {
+                ctx.font = `${(lineGap * 4).toFixed(1)}px Bravura, serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'alphabetic';
+                const glyph = durationBeats >= 4
+                    ? SMUFL.noteheadWhole
+                    : (durationBeats >= 2 ? SMUFL.noteheadHalf : SMUFL.noteheadBlack);
+                ctx.fillText(glyph, x, y);
+                ctx.restore();
+                return;
+            }
+
             if (durationBeats >= 4) {
-                // Whole note (Ronde): wider horizontal outer oval with angled inner hollow ('evenodd')
                 const wrx = rx * 1.18;
                 const wry = ry * 1.04;
                 ctx.beginPath();
@@ -2519,7 +2623,6 @@
                 ctx.ellipse(x, y, wrx * 0.52, wry * 0.68, -0.52, 0, Math.PI * 2);
                 ctx.fill('evenodd');
             } else if (durationBeats >= 2) {
-                // Half note (Blanche): tilted outer oval with steeper tilted inner cutout for authentic thick-crescent engraving
                 const hrx = rx * 1.03;
                 const hry = ry * 1.02;
                 ctx.beginPath();
@@ -2527,7 +2630,6 @@
                 ctx.ellipse(x, y, hrx * 0.78, hry * 0.48, -0.58, 0, Math.PI * 2);
                 ctx.fill('evenodd');
             } else {
-                // Quarter / Eighth note (Noire / Croche): full tilted Bravura oval
                 ctx.beginPath();
                 ctx.ellipse(x, y, rx, ry, -0.33, 0, Math.PI * 2);
                 ctx.fill();
@@ -2535,10 +2637,20 @@
             ctx.restore();
         }
 
-        // Draw an authentic tapered calligraphic eighth-note flag (Crochet de croche)
+        // Draw an authentic Steinberg Bravura SMuFL eighth-note flag (\uE240 flag8thUp, \uE241 flag8thDown)
         function drawEngravedFlag(ctx, stemX, stemEndY, stemUp, lineGap, color) {
             ctx.save();
             ctx.fillStyle = color;
+
+            if (isBravuraLoaded()) {
+                ctx.font = `${(lineGap * 4).toFixed(1)}px Bravura, serif`;
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'alphabetic';
+                ctx.fillText(stemUp ? SMUFL.flag8thUp : SMUFL.flag8thDown, stemX - 0.6, stemEndY);
+                ctx.restore();
+                return;
+            }
+
             const flagLen = lineGap * 2.15;
             const flagWidth = lineGap * 0.85;
             const thick = lineGap * 0.44;
@@ -2596,6 +2708,8 @@
         // Draw events (notes, rests, stems, beams, ledger lines, guide tones, note names, and Ear/Look-Ahead masks) for one staff
         function drawStaffEvents(ctx, events, measure, isTreble, startX, usableWidth, staffTopY, midGrandY, lineGap, palette) {
             const keyInfo = KEY_SIGNATURES[measure.rootKey] || KEY_SIGNATURES['C'];
+            const useBravura = isBravuraLoaded();
+            const smuflFont = `${(lineGap * 4).toFixed(1)}px Bravura, serif`;
 
             // Check if entire measure is masked by Look-Ahead ('measure' mode)
             const isWholeMeasureLookAheadMasked = (
@@ -2606,7 +2720,8 @@
 
             const staffBottomY = staffTopY + lineGap * 4;
             const middleLineY = staffTopY + lineGap * 2;
-            const rx = lineGap * 0.64;
+            // Bravura noteheadBlack / noteheadHalf half-width is 0.59 * lineGap (advance width = 1.18 * lineGap)
+            const rx = lineGap * 0.59;
             const ry = lineGap * 0.45;
 
             // Pre-compute layout geometry for all events so eighth-note beams and accidentals never collide
@@ -2652,7 +2767,7 @@
                         prevDisplaced = false;
                     }
                     noteInfos[nIdx].noteX = noteInfos[nIdx].displaced
-                        ? (stemUp ? (x + rx * 1.84) : (x - rx * 1.84))
+                        ? (stemUp ? (x + rx * 1.88) : (x - rx * 1.88))
                         : x;
                 }
 
@@ -2670,12 +2785,13 @@
                         assignedCol++;
                     }
                     colLastYs[assignedCol] = n.y;
-                    n.accX = leftmostNoteX - rx - lineGap * 0.90 - assignedCol * (lineGap * 0.98);
+                    n.accX = leftmostNoteX - rx - lineGap * 0.72 - assignedCol * (lineGap * 1.05);
                 }
 
-                const stemX = stemUp ? (x + rx * 0.90) : (x - rx * 0.90);
-                const stemStartY = stemUp ? (bottomNote.y - ry * 0.20) : (topNote.y + ry * 0.20);
-                const stemLen = lineGap * 3.15;
+                // Exact SMuFL stem anchor (stemUpSE / stemDownNW)
+                const stemX = stemUp ? (x + rx - 0.6) : (x - rx + 0.6);
+                const stemStartY = stemUp ? (bottomNote.y - lineGap * 0.16) : (topNote.y + lineGap * 0.16);
+                const stemLen = lineGap * 3.25;
                 let stemEndY = stemUp ? (topNote.y - stemLen) : (bottomNote.y + stemLen);
 
                 // Clamp stems in the middle gap between Treble and Bass so they never collide across staves
@@ -2711,15 +2827,15 @@
                     for (const item of [a, b]) {
                         for (const n of item.noteInfos) {
                             n.noteX = n.displaced
-                                ? (pairStemUp ? (item.x + rx * 1.84) : (item.x - rx * 1.84))
+                                ? (pairStemUp ? (item.x + rx * 1.88) : (item.x - rx * 1.88))
                                 : item.x;
                         }
-                        item.stemX = pairStemUp ? (item.x + rx * 0.90) : (item.x - rx * 0.90);
-                        item.stemStartY = pairStemUp ? (item.bottomNote.y - ry * 0.20) : (item.topNote.y + ry * 0.20);
+                        item.stemX = pairStemUp ? (item.x + rx - 0.6) : (item.x - rx + 0.6);
+                        item.stemStartY = pairStemUp ? (item.bottomNote.y - lineGap * 0.16) : (item.topNote.y + lineGap * 0.16);
                     }
 
-                    const rawEndA = pairStemUp ? (a.topNote.y - lineGap * 3.15) : (a.bottomNote.y + lineGap * 3.15);
-                    const rawEndB = pairStemUp ? (b.topNote.y - lineGap * 3.15) : (b.bottomNote.y + lineGap * 3.15);
+                    const rawEndA = pairStemUp ? (a.topNote.y - lineGap * 3.25) : (a.bottomNote.y + lineGap * 3.25);
+                    const rawEndB = pairStemUp ? (b.topNote.y - lineGap * 3.25) : (b.bottomNote.y + lineGap * 3.25);
 
                     const dampedDiff = Math.max(-lineGap * 0.80, Math.min(lineGap * 0.80, (rawEndB - rawEndA) * 0.5));
                     if (pairStemUp) {
@@ -2832,7 +2948,7 @@
                     ctx.restore();
                 }
 
-                // 3. Draw Engraved Noteheads, Multi-Column Accidentals, and Augmentation Dots
+                // 3. Draw Bravura SMuFL Noteheads, Multi-Column Accidentals, and Augmentation Dots
                 const rightmostNoteX = Math.max(...noteInfos.map(n => n.noteX));
                 for (let nIdx = 0; nIdx < noteInfos.length; nIdx++) {
                     const n = noteInfos[nIdx];
@@ -2844,7 +2960,7 @@
                         fillColor = palette.guideTone;
                     }
 
-                    drawEngravedNotehead(ctx, n.noteX, n.y, rx, ry, ev.durationBeats, fillColor);
+                    drawEngravedNotehead(ctx, n.noteX, n.y, rx, ry, ev.durationBeats, fillColor, lineGap);
 
                     // Augmentation dot for dotted half (3 beats) or dotted quarter (1.5 beats)
                     // Shift dot into the staff space if the note sits on a line so the staff line never cuts through the dot
@@ -2861,11 +2977,18 @@
                         ctx.restore();
                     }
 
-                    // Engraved Accidental symbol at its collision-free column X
+                    // Engraved SMuFL Accidental glyph at its collision-free column X
                     if (n.accidental && n.accX !== undefined) {
                         ctx.save();
-                        ctx.font = `600 ${Math.round(lineGap * 1.82)}px "Cormorant Garamond", Georgia, serif`;
-                        drawHaloText(ctx, n.accidental, n.accX, n.y + lineGap * 0.52, fillColor, palette.bg, 2.6);
+                        if (useBravura) {
+                            ctx.font = smuflFont;
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'alphabetic';
+                            drawHaloText(ctx, SMUFL.accidentalFromSymbol(n.accidental), n.accX, n.y, fillColor, palette.bg, 2.2);
+                        } else {
+                            ctx.font = `600 ${Math.round(lineGap * 1.82)}px "Cormorant Garamond", Georgia, serif`;
+                            drawHaloText(ctx, n.accidental, n.accX, n.y + lineGap * 0.52, fillColor, palette.bg, 2.6);
+                        }
                         ctx.restore();
                     }
                 }
@@ -2994,20 +3117,30 @@
             ctx.restore();
         }
 
-        // Draw authentic engraved Quarter Rest (Soupir), Eighth Rest (Demi-soupir), or Half Rest (Demi-pause)
+        // Draw authentic Steinberg Bravura SMuFL Quarter Rest (\uE4E5), Eighth Rest (\uE4E6), or Half Rest (\uE4E4)
         function drawRestGlyph(ctx, x, staffTopY, lineGap, durationBeats, palette) {
             ctx.save();
             ctx.fillStyle = palette.ink;
             ctx.strokeStyle = palette.ink;
 
+            if (isBravuraLoaded()) {
+                ctx.font = `${(lineGap * 4).toFixed(1)}px Bravura, serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'alphabetic';
+                const restGlyph = durationBeats >= 2
+                    ? SMUFL.restHalf
+                    : (durationBeats === 0.5 ? SMUFL.rest8th : SMUFL.restQuarter);
+                ctx.fillText(restGlyph, x, staffTopY + lineGap * 2);
+                ctx.restore();
+                return;
+            }
+
             if (durationBeats >= 2) {
-                // Engraved Half Rest sitting on middle staff line
                 const midLineY = staffTopY + lineGap * 2;
                 const blockW = lineGap * 1.15;
                 const blockH = lineGap * 0.52;
                 ctx.fillRect(x - blockW / 2, midLineY - blockH, blockW, blockH);
             } else if (durationBeats === 0.5) {
-                // Engraved Eighth Rest (Demi-soupir): diagonal stem + bulbous hook droplet in 3rd space
                 const topY = staffTopY + lineGap * 1.25;
                 const botY = staffTopY + lineGap * 3.1;
                 ctx.lineWidth = 1.4;
@@ -3023,7 +3156,6 @@
                 ctx.quadraticCurveTo(x, topY + lineGap * 0.55, x + lineGap * 0.32, topY + lineGap * 0.15);
                 ctx.stroke();
             } else {
-                // Engraved Calligraphic Quarter Rest (Soupir) — filled variable-width contour
                 const y0 = staffTopY + lineGap * 0.72;
                 const s = lineGap * 0.36;
                 ctx.beginPath();
@@ -4216,6 +4348,11 @@
             renderSavedScenariosList();
             initWebMIDI();
             applyStylePreset('gymnopedie');
+            if (document.fonts && document.fonts.load) {
+                document.fonts.load('40px Bravura').then(() => {
+                    renderScore();
+                }).catch(() => {});
+            }
             requestAnimationFrame(animationLoop);
         };
     </script>
