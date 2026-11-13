@@ -216,11 +216,11 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
                 </svg>
                 <select id="selectSoundTypeHeader" class="bg-studio-850 text-parchment-100 text-[11px] sm:text-xs rounded-lg px-2 py-1 border border-studio-700 focus:outline-none focus:border-amber-500 cursor-pointer">
-                    <option value="classical" selected>🎹 Piano Classique (Grand)</option>
-                    <option value="bright">✨ Piano Concert Cristallin</option>
-                    <option value="felt">🌙 Piano Feutré Intime</option>
-                    <option value="electric">⚡ Piano Électrique Doux</option>
-                    <option value="harpsichord">🏛️ Pianoforte / Clavecin</option>
+                    <option value="classical" selected>🎹 Classique</option>
+                    <option value="bright">✨ Concert</option>
+                    <option value="felt">🌙 Feutré</option>
+                    <option value="electric">⚡ Électrique</option>
+                    <option value="harpsichord">🏛️ Clavecin</option>
                 </select>
             </div>
 
@@ -642,7 +642,7 @@
                     </div>
                 </div>
 
-                <canvas id="scoreCanvas" class="block w-full h-full cursor-pointer touch-pan-y"></canvas>
+                <canvas id="scoreCanvas" class="block w-full cursor-pointer touch-pan-y"></canvas>
 
                 <!-- Subtle Hint Overlay at bottom-right of canvas (auto-hidden on compact smartphone landscape) -->
                 <div id="hintOverlayBanner" class="absolute bottom-2.5 right-3 pointer-events-none hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-lg bg-studio-900/75 text-parchment-200 text-[10px] backdrop-blur-sm border border-studio-700/60 shadow">
@@ -669,20 +669,46 @@
         // Diatonic C major letter steps (0=C, 1=D, 2=E, 3=F, 4=G, 5=A, 6=B)
         const DIATONIC_SEMITONES = [0, 2, 4, 5, 7, 9, 11];
 
-        // Circle of Fifths definitions for keys and key signature rendering
+        // Circle of Fifths definitions for keys and modal parent key signature resolution
         const KEY_SIGNATURES = {
-            'C':  { rootPc: 0,  sharps: 0, flats: 0, useFlats: false, labelFr: 'Do',  diatonicOffset: 0 },
-            'G':  { rootPc: 7,  sharps: 1, flats: 0, useFlats: false, labelFr: 'Sol', diatonicOffset: 4 },
-            'D':  { rootPc: 2,  sharps: 2, flats: 0, useFlats: false, labelFr: 'Ré',  diatonicOffset: 1 },
-            'A':  { rootPc: 9,  sharps: 3, flats: 0, useFlats: false, labelFr: 'La',  diatonicOffset: 5 },
-            'E':  { rootPc: 4,  sharps: 4, flats: 0, useFlats: false, labelFr: 'Mi',  diatonicOffset: 2 },
-            'F':  { rootPc: 5,  sharps: 0, flats: 1, useFlats: true,  labelFr: 'Fa',  diatonicOffset: 3 },
-            'Bb': { rootPc: 10, sharps: 0, flats: 2, useFlats: true,  labelFr: 'Si♭', diatonicOffset: 6 },
-            'Eb': { rootPc: 3,  sharps: 0, flats: 3, useFlats: true,  labelFr: 'Mi♭', diatonicOffset: 2 },
-            'Ab': { rootPc: 8,  sharps: 0, flats: 4, useFlats: true,  labelFr: 'La♭', diatonicOffset: 5 }
+            'C':  { rootPc: 0,  fifths: 0,  sharps: 0, flats: 0, useFlats: false, labelFr: 'Do',  diatonicOffset: 0 },
+            'G':  { rootPc: 7,  fifths: 1,  sharps: 1, flats: 0, useFlats: false, labelFr: 'Sol', diatonicOffset: 4 },
+            'D':  { rootPc: 2,  fifths: 2,  sharps: 2, flats: 0, useFlats: false, labelFr: 'Ré',  diatonicOffset: 1 },
+            'A':  { rootPc: 9,  fifths: 3,  sharps: 3, flats: 0, useFlats: false, labelFr: 'La',  diatonicOffset: 5 },
+            'E':  { rootPc: 4,  fifths: 4,  sharps: 4, flats: 0, useFlats: false, labelFr: 'Mi',  diatonicOffset: 2 },
+            'F':  { rootPc: 5,  fifths: -1, sharps: 0, flats: 1, useFlats: true,  labelFr: 'Fa',  diatonicOffset: 3 },
+            'Bb': { rootPc: 10, fifths: -2, sharps: 0, flats: 2, useFlats: true,  labelFr: 'Si♭', diatonicOffset: 6 },
+            'Eb': { rootPc: 3,  fifths: -3, sharps: 0, flats: 3, useFlats: true,  labelFr: 'Mi♭', diatonicOffset: 2 },
+            'Ab': { rootPc: 8,  fifths: -4, sharps: 0, flats: 4, useFlats: true,  labelFr: 'La♭', diatonicOffset: 5 }
         };
 
         const CIRCLE_OF_FIFTHS_ORDER = ['Ab', 'Eb', 'Bb', 'F', 'C', 'G', 'D', 'A', 'E'];
+
+        // Circle-of-fifths shift relative to the major mode for each mode's true key signature
+        const MODE_FIFTH_OFFSET = {
+            lydian:     1,
+            major:      0,
+            mixolydian: -1,
+            dorian:     -2,
+            aeolian:    -3
+        };
+
+        // Resolve authentic key signature (sharps/flats/enharmonic bias) for any tonic + mode
+        function getModalSignatureInfo(rootKey, mode = 'major') {
+            const base = KEY_SIGNATURES[rootKey] || KEY_SIGNATURES['C'];
+            const fifths = base.fifths + (MODE_FIFTH_OFFSET[mode] || 0);
+            const sharps = fifths > 0 ? Math.min(7, fifths) : 0;
+            const flats = fifths < 0 ? Math.min(7, -fifths) : 0;
+            const useFlats = flats > 0 || (fifths === 0 && (mode === 'dorian' || mode === 'aeolian' || mode === 'mixolydian'));
+            return {
+                rootPc: base.rootPc,
+                fifths,
+                sharps,
+                flats,
+                useFlats,
+                labelFr: base.labelFr
+            };
+        }
 
         // Modal intervals in semitones from the modal tonic
         const MODE_INTERVALS = {
@@ -770,6 +796,7 @@
             // Musical parameters
             activePreset: 'gymnopedie',
             rootKey: 'D',
+            generationRootKey: 'D',  // Tracks lookahead buffer modulation independently of playhead UI key
             mode: 'dorian',
             progressiveModulation: false,
             harmonicRichness: 'extensions',
@@ -1224,9 +1251,11 @@
             return ((midi % 12) + 12) % 12;
         }
 
-        // Format a pitch class into a readable note name based on current key signature
-        function formatPitchClass(pc, useFlats = false, lang = 'en') {
+        // Format a pitch class into a readable note name based on modal key signature
+        function formatPitchClass(pc, useFlats = false, lang = 'en', flatsCount = 0) {
             const idx = ((pc % 12) + 12) % 12;
+            if (flatsCount >= 6 && idx === 11) return lang === 'fr' ? 'Do♭' : 'Cb';
+            if (flatsCount >= 7 && idx === 4)  return lang === 'fr' ? 'Fa♭' : 'Fb';
             if (lang === 'fr') {
                 return useFlats ? NOTE_NAMES_FLAT_FR[idx] : NOTE_NAMES_SHARP_FR[idx];
             }
@@ -1308,7 +1337,7 @@
 
         // Build chord structure (root, 3rd, 5th, 7th, 9th, chord symbol, Roman numeral, guide tones)
         function buildContemplativeChord(rootKey, mode, degree, richness, preset) {
-            const keyInfo = KEY_SIGNATURES[rootKey] || KEY_SIGNATURES['C'];
+            const sigInfo = getModalSignatureInfo(rootKey, mode);
             const scalePcs = getScalePitchClasses(rootKey, mode);
 
             const rootPc = scalePcs[degree % 7];
@@ -1349,7 +1378,7 @@
             if (isMinor || isDim) romanBase = romanBase.toLowerCase();
             if (isDim) romanBase += '°';
 
-            const rootName = formatPitchClass(rootPc, keyInfo.useFlats, 'en');
+            const rootName = formatPitchClass(rootPc, sigInfo.useFlats, 'en', sigInfo.flats);
             let suffix = isMinor ? 'm' : (isDim ? 'dim' : '');
             let romanSuffix = '';
 
@@ -1418,6 +1447,8 @@
                 ninthPc,
                 chordPcs,
                 guideTonePcs,
+                preferFlats: isBorrowedMinorIv,
+                preferSharps: isSecondaryDom && sigInfo.flats === 0,
                 symbol: `${rootName}${suffix}`,
                 roman: `${romanBase}${romanSuffix}`
             };
@@ -1474,23 +1505,42 @@
             const measureIndex = AppState.generatedMeasureCounter++;
 
             // Handle optional Progressive Modulation along the Circle of Fifths every 8 measures
-            if (AppState.progressiveModulation && measureIndex > 0 && measureIndex % 8 === 0) {
-                const idx = CIRCLE_OF_FIFTHS_ORDER.indexOf(AppState.rootKey);
+            // Uses generationRootKey so lookahead buffering never overwrites the playhead's UI key prematurely
+            const willModulateNow = (AppState.progressiveModulation && measureIndex > 0 && measureIndex % 8 === 0);
+            if (willModulateNow) {
+                const idx = CIRCLE_OF_FIFTHS_ORDER.indexOf(AppState.generationRootKey);
                 const dir = Math.random() < 0.65 ? 1 : -1;
                 const nextIdx = (idx + dir + CIRCLE_OF_FIFTHS_ORDER.length) % CIRCLE_OF_FIFTHS_ORDER.length;
-                AppState.rootKey = CIRCLE_OF_FIFTHS_ORDER[nextIdx];
-                const selectEl = document.getElementById('selectRootKey');
-                if (selectEl) selectEl.value = AppState.rootKey;
-                updateHeaderSummary();
+                AppState.generationRootKey = CIRCLE_OF_FIFTHS_ORDER[nextIdx];
             }
 
-            const rootKey = AppState.rootKey;
+            const rootKey = AppState.generationRootKey;
             const mode = AppState.mode;
             const timeSig = AppState.timeSig;
+            const isSixEight = (timeSig === '6/8');
             const beatsPerMeasure = getBeatsPerMeasure(timeSig);
             const richness = AppState.harmonicRichness;
             const lhPattern = AppState.leftHandPattern;
             const rhDensity = Number(AppState.rightHandDensity);
+
+            const pedFlags = computePedagogyFlagsForMeasureIndex(measureIndex);
+            const nextPedFlags = computePedagogyFlagsForMeasureIndex(measureIndex + 1);
+            const nextWillModulate = (AppState.progressiveModulation && ((measureIndex + 1) % 8 === 0));
+            const prevMeas = measureIndex > 0 ? AppState.measures[measureIndex - 1] : null;
+            const prevLastRh = (prevMeas && prevMeas.rhEvents && prevMeas.rhEvents.length > 0)
+                ? prevMeas.rhEvents[prevMeas.rhEvents.length - 1]
+                : null;
+            const incomingTieNotes = (
+                prevLastRh && prevLastRh.tieToNext && !prevLastRh.isRest && prevLastRh.notes.length > 0 &&
+                !pedFlags.isEarTraining && !pedFlags.isImprovisation &&
+                !prevMeas.isEarTraining && !prevMeas.isImprovisation && !willModulateNow
+            ) ? [...prevLastRh.notes] : null;
+
+            const allowOutgoingTie = (
+                !pedFlags.isEarTraining && !pedFlags.isImprovisation &&
+                !nextPedFlags.isEarTraining && !nextPedFlags.isImprovisation &&
+                !nextWillModulate
+            );
 
             // Pick next chord degree via Markov table
             const nextDegree = measureIndex === 0
@@ -1506,7 +1556,33 @@
             const rhEvents = [];
 
             // ==================== 1. LEFT HAND (BASS CLEF) GENERATION ====================
-            if (lhPattern === 'satie') {
+            if (isSixEight) {
+                // Authentic Compound Duple (6/8 = 2 dotted-quarter beats of 1.5 quarter-beats each)
+                const fifthMidi = voicing.bassMidi + 7;
+                const octaveMidi = voicing.bassMidi + 12;
+                if (lhPattern === 'satie') {
+                    lhEvents.push({ startBeat: 0, durationBeats: 1.5, notes: [voicing.bassMidi], isRest: false });
+                    lhEvents.push({ startBeat: 1.5, durationBeats: 1.5, notes: voicing.upperMidis, isRest: false });
+                } else if (lhPattern === 'arpeggio_slow') {
+                    // Flowing Barcarolle compound lilt: quarter + eighth | quarter + eighth
+                    lhEvents.push({ startBeat: 0, durationBeats: 1, notes: [voicing.bassMidi], isRest: false });
+                    lhEvents.push({ startBeat: 1, durationBeats: 0.5, notes: [fifthMidi], isRest: false });
+                    lhEvents.push({ startBeat: 1.5, durationBeats: 1, notes: [octaveMidi], isRest: false });
+                    lhEvents.push({ startBeat: 2.5, durationBeats: 0.5, notes: [voicing.upperMidis[0]], isRest: false });
+                } else if (lhPattern === 'nordic_fifths') {
+                    lhEvents.push({ startBeat: 0, durationBeats: 1.5, notes: [voicing.bassMidi, fifthMidi], isRest: false });
+                    lhEvents.push({ startBeat: 1.5, durationBeats: 1.5, notes: [fifthMidi, octaveMidi], isRest: false });
+                } else if (lhPattern === 'sustained_voicing') {
+                    lhEvents.push({ startBeat: 0, durationBeats: 3, notes: [voicing.bassMidi, voicing.upperMidis[0], voicing.upperMidis[1]], isRest: false });
+                } else if (lhPattern === 'ostinato_eighths') {
+                    const top1 = voicing.upperMidis[0];
+                    const top2 = voicing.upperMidis[1];
+                    const pattern6 = [voicing.bassMidi, fifthMidi, top1, top2, fifthMidi, top1];
+                    for (let e = 0; e < 6; e++) {
+                        lhEvents.push({ startBeat: e * 0.5, durationBeats: 0.5, notes: [pattern6[e]], isRest: false });
+                    }
+                }
+            } else if (lhPattern === 'satie') {
                 // Beat 0: Low Bass Root, Beat 1 (& 2): Warm middle-register chord voicing
                 lhEvents.push({
                     startBeat: 0,
@@ -1642,82 +1718,173 @@
                 return chosen;
             };
 
-            // Build rhythmic cells according to Right Hand Density level (1 to 4)
-            let beatCursor = 0;
-            while (beatCursor < beatsPerMeasure - 0.001) {
-                const remaining = beatsPerMeasure - beatCursor;
-
-                // Intentional breathing rest in Minecraft / Level 2
-                if (beatCursor > 0 && remaining >= 1 && Math.random() < (AppState.activePreset === 'minecraft' ? 0.25 : 0.14)) {
-                    rhEvents.push({
-                        startBeat: beatCursor,
-                        durationBeats: 1,
-                        notes: [],
-                        isRest: true
-                    });
-                    beatCursor += 1;
-                    continue;
-                }
-
-                let dur = 1;
-                if (rhDensity === 1) {
-                    // Calm half notes, dotted half notes, or whole notes
-                    if (remaining >= 3 && beatsPerMeasure === 3) dur = 3;
-                    else if (remaining >= 2) dur = 2;
-                    else dur = 1;
-                } else if (rhDensity === 2) {
-                    // Lyrical quarter notes and half notes
-                    if (remaining >= 2 && Math.random() < 0.42) dur = 2;
-                    else dur = 1;
-                } else if (rhDensity === 3) {
-                    // Flowing eighth notes mixed with quarters
-                    if (remaining >= 1 && Math.random() < 0.48) {
-                        // Pair of eighth notes
-                        const n1 = pickNextMelodyNote(beatCursor === 0);
-                        rhEvents.push({
-                            startBeat: beatCursor,
-                            durationBeats: 0.5,
-                            notes: [n1],
-                            isRest: false
-                        });
-                        const n2 = pickNextMelodyNote(false);
-                        rhEvents.push({
-                            startBeat: beatCursor + 0.5,
-                            durationBeats: 0.5,
-                            notes: [n2],
-                            isRest: false
-                        });
-                        beatCursor += 1;
-                        continue;
-                    } else {
-                        dur = (remaining >= 2 && Math.random() < 0.25) ? 2 : 1;
-                    }
-                } else if (rhDensity === 4) {
-                    // Polyphonic melody: harmonized in 3rds or 6ths
-                    dur = (remaining >= 2 && Math.random() < 0.45) ? 2 : 1;
-                }
-
-                const mainNote = pickNextMelodyNote(beatCursor === 0);
+            const buildRhNoteArray = (mainNote) => {
                 const notes = [mainNote];
-
-                // If Level 4 (Polyphonic), add a diatonic 3rd or 6th beneath the melody note
                 if (rhDensity === 4 && Math.random() < 0.72) {
                     const idxInScale = scaleMidis.indexOf(mainNote);
-                    const harmonyOffset = Math.random() < 0.7 ? 2 : 5; // 3rd or 6th below
+                    const harmonyOffset = Math.random() < 0.7 ? 2 : 5;
                     if (idxInScale - harmonyOffset >= 0) {
                         notes.unshift(scaleMidis[idxInScale - harmonyOffset]);
                     }
                 }
+                return notes;
+            };
 
-                rhEvents.push({
-                    startBeat: beatCursor,
-                    durationBeats: dur,
-                    notes,
-                    isRest: false,
-                    tieToNext: (dur >= 2 && beatCursor + dur >= beatsPerMeasure && Math.random() < 0.22)
-                });
+            if (isSixEight) {
+                // Compound 6/8 melody shaped in two 1.5-beat compound pulses
+                if (rhDensity === 1 && !incomingTieNotes && Math.random() < 0.45) {
+                    const mainNote = pickNextMelodyNote(true);
+                    rhEvents.push({
+                        startBeat: 0,
+                        durationBeats: 3,
+                        notes: [mainNote],
+                        isRest: false,
+                        tieToNext: allowOutgoingTie && Math.random() < 0.22
+                    });
+                } else {
+                    for (const cStart of [0, 1.5]) {
+                        if (cStart === 0 && incomingTieNotes) {
+                            rhEvents.push({
+                                startBeat: 0,
+                                durationBeats: 1.5,
+                                notes: incomingTieNotes,
+                                isRest: false,
+                                isTiedFromPrev: true
+                            });
+                            AppState.lastMelodyMidi = incomingTieNotes[incomingTieNotes.length - 1];
+                            continue;
+                        }
 
-                beatCursor += dur;
+                        // Occasional compound breathing rest on 2nd compound beat
+                        if (cStart === 1.5 && Math.random() < (AppState.activePreset === 'minecraft' ? 0.22 : 0.12)) {
+                            rhEvents.push({ startBeat: 1.5, durationBeats: 1.5, notes: [], isRest: true });
+                            continue;
+                        }
+
+                        if (rhDensity === 3 && Math.random() < 0.52) {
+                            // True 3-eighth compound group
+                            for (let k = 0; k < 3; k++) {
+                                const n = pickNextMelodyNote(cStart === 0 && k === 0);
+                                rhEvents.push({
+                                    startBeat: cStart + k * 0.5,
+                                    durationBeats: 0.5,
+                                    notes: [n],
+                                    isRest: false
+                                });
+                            }
+                        } else if (rhDensity >= 2 && Math.random() < (rhDensity === 2 ? 0.45 : 0.35)) {
+                            // Classic 6/8 quarter + eighth lilt (1.0 + 0.5)
+                            const n1 = pickNextMelodyNote(cStart === 0);
+                            rhEvents.push({
+                                startBeat: cStart,
+                                durationBeats: 1,
+                                notes: buildRhNoteArray(n1),
+                                isRest: false
+                            });
+                            const n2 = pickNextMelodyNote(false);
+                            rhEvents.push({
+                                startBeat: cStart + 1,
+                                durationBeats: 0.5,
+                                notes: [n2],
+                                isRest: false
+                            });
+                        } else {
+                            // Dotted quarter note
+                            const mainNote = pickNextMelodyNote(cStart === 0);
+                            rhEvents.push({
+                                startBeat: cStart,
+                                durationBeats: 1.5,
+                                notes: buildRhNoteArray(mainNote),
+                                isRest: false,
+                                tieToNext: (cStart === 1.5 && allowOutgoingTie && Math.random() < 0.22)
+                            });
+                        }
+                    }
+                }
+            } else {
+                // Simple / Asymmetric meters (3/4, 4/4, 5/4)
+                let beatCursor = 0;
+                while (beatCursor < beatsPerMeasure - 0.001) {
+                    const remaining = beatsPerMeasure - beatCursor;
+
+                    // If previous bar tied over the barline into beat 0, preserve exact tied pitch without re-attack
+                    if (beatCursor === 0 && incomingTieNotes) {
+                        const tieDur = (rhDensity === 1 && remaining >= 2) ? 2 : 1;
+                        rhEvents.push({
+                            startBeat: 0,
+                            durationBeats: tieDur,
+                            notes: incomingTieNotes,
+                            isRest: false,
+                            isTiedFromPrev: true
+                        });
+                        AppState.lastMelodyMidi = incomingTieNotes[incomingTieNotes.length - 1];
+                        beatCursor += tieDur;
+                        continue;
+                    }
+
+                    // Intentional breathing rest in Minecraft / Level 2
+                    if (beatCursor > 0 && remaining >= 1 && Math.random() < (AppState.activePreset === 'minecraft' ? 0.25 : 0.14)) {
+                        rhEvents.push({
+                            startBeat: beatCursor,
+                            durationBeats: 1,
+                            notes: [],
+                            isRest: true
+                        });
+                        beatCursor += 1;
+                        continue;
+                    }
+
+                    let dur = 1;
+                    if (rhDensity === 1) {
+                        // Calm half notes, dotted half notes, or whole notes
+                        if (remaining >= 3 && beatsPerMeasure === 3) dur = 3;
+                        else if (remaining >= 2) dur = 2;
+                        else dur = 1;
+                    } else if (rhDensity === 2) {
+                        // Lyrical quarter notes and half notes
+                        if (remaining >= 2 && Math.random() < 0.42) dur = 2;
+                        else dur = 1;
+                    } else if (rhDensity === 3) {
+                        // Flowing eighth notes mixed with quarters
+                        if (remaining >= 1 && Math.random() < 0.48) {
+                            // Pair of eighth notes
+                            const n1 = pickNextMelodyNote(beatCursor === 0);
+                            rhEvents.push({
+                                startBeat: beatCursor,
+                                durationBeats: 0.5,
+                                notes: [n1],
+                                isRest: false
+                            });
+                            const n2 = pickNextMelodyNote(false);
+                            rhEvents.push({
+                                startBeat: beatCursor + 0.5,
+                                durationBeats: 0.5,
+                                notes: [n2],
+                                isRest: false
+                            });
+                            beatCursor += 1;
+                            continue;
+                        } else {
+                            dur = (remaining >= 2 && Math.random() < 0.25) ? 2 : 1;
+                        }
+                    } else if (rhDensity === 4) {
+                        // Polyphonic melody: harmonized in 3rds or 6ths
+                        dur = (remaining >= 2 && Math.random() < 0.45) ? 2 : 1;
+                    }
+
+                    const mainNote = pickNextMelodyNote(beatCursor === 0);
+                    const notes = buildRhNoteArray(mainNote);
+
+                    rhEvents.push({
+                        startBeat: beatCursor,
+                        durationBeats: dur,
+                        notes,
+                        isRest: false,
+                        tieToNext: (allowOutgoingTie && dur >= 2 && beatCursor + dur >= beatsPerMeasure && Math.random() < 0.22)
+                    });
+
+                    beatCursor += dur;
+                }
             }
 
             // Compute comfortable Treble register guide/chord tones (C4=60 to G5=79) for Guided Improvisation
@@ -1735,8 +1902,6 @@
                 cursorMidi = candidate;
             }
             improGuideMidis.sort((a, b) => a - b);
-
-            const pedFlags = computePedagogyFlagsForMeasureIndex(measureIndex);
 
             return {
                 index: measureIndex,
@@ -1771,11 +1936,24 @@
 
         // Update existing buffered measures immediately when user toggles Ear Training or Improvisation
         function syncPedagogyFlagsOnMeasures() {
-            for (const m of AppState.measures) {
+            for (let i = 0; i < AppState.measures.length; i++) {
+                const m = AppState.measures[i];
                 const flags = computePedagogyFlagsForMeasureIndex(m.index);
                 m.isEarTraining = flags.isEarTraining;
                 m.isImprovisation = flags.isImprovisation;
                 if (!m.isEarTraining) m.earRevealed = false;
+
+                // Ensure ties never cross into/out of mystery or improvisation measures
+                if (m.isEarTraining || m.isImprovisation) {
+                    if (m.rhEvents.length > 0) {
+                        m.rhEvents[0].isTiedFromPrev = false;
+                        m.rhEvents[m.rhEvents.length - 1].tieToNext = false;
+                    }
+                    if (i > 0 && AppState.measures[i - 1].rhEvents.length > 0) {
+                        const prevRh = AppState.measures[i - 1].rhEvents;
+                        prevRh[prevRh.length - 1].tieToNext = false;
+                    }
+                }
             }
             updateHudInfo();
             renderScore();
@@ -1790,6 +1968,7 @@
             AppState.lastTriggeredSubBeat = -1;
             AppState.lastChordDegree = 0;
             AppState.lastMelodyMidi = 69;
+            AppState.generationRootKey = AppState.rootKey;
 
             for (let i = 0; i < 16; i++) {
                 AppState.measures.push(generateNextMeasure());
@@ -1807,10 +1986,12 @@
         }
 
         // Regenerate upcoming measures seamlessly when a user tweaks any parameter live
-        function refreshUpcomingMeasuresLive() {
-            const keepUntil = AppState.currentMeasureIndex + 1;
+        function refreshUpcomingMeasuresLive(applyCurrentIfPausedAtStart = true) {
+            const canReplaceCurrent = applyCurrentIfPausedAtStart && !AppState.isPlaying && AppState.currentBeatFloat < 0.05;
+            const keepUntil = canReplaceCurrent ? AppState.currentMeasureIndex : (AppState.currentMeasureIndex + 1);
             AppState.measures = AppState.measures.slice(0, keepUntil);
             AppState.generatedMeasureCounter = keepUntil;
+            AppState.generationRootKey = AppState.rootKey;
             ensureInfiniteBuffer();
             updateHeaderSummary();
             updateHudInfo();
@@ -1823,15 +2004,34 @@
          ***********************************************************************/
         const scoreCanvas = document.getElementById('scoreCanvas');
         const scoreCtx = scoreCanvas.getContext('2d');
+        let cachedCanvasPixelW = 0;
+        let cachedCanvasPixelH = 0;
+
+        // Only resize the GPU backing store when canvas pixel dimensions actually change
+        function syncCanvasBackingSize(cssW, cssH, dpr) {
+            const safeW = Math.max(1, Math.round(cssW));
+            const safeH = Math.max(1, Math.round(cssH));
+            const pxW = Math.max(1, Math.round(safeW * dpr));
+            const pxH = Math.max(1, Math.round(safeH * dpr));
+            if (pxW !== cachedCanvasPixelW || pxH !== cachedCanvasPixelH) {
+                scoreCanvas.width = pxW;
+                scoreCanvas.height = pxH;
+                scoreCanvas.style.height = `${safeH}px`;
+                cachedCanvasPixelW = pxW;
+                cachedCanvasPixelH = pxH;
+            }
+            scoreCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            scoreCtx.clearRect(0, 0, safeW, safeH);
+        }
 
         // Map a MIDI note to its diatonic step relative to Middle C (C4 = step 0) and accidental
-        function midiToStaffStepAndAccidental(midi, rootKey) {
-            const keyInfo = KEY_SIGNATURES[rootKey] || KEY_SIGNATURES['C'];
-            const useFlats = keyInfo.useFlats;
+        // Supports full modal key signatures (0..7 sharps/flats) & per-measure accidental memory
+        function midiToStaffStepAndAccidental(midi, rootKey, mode = 'major', measureStepAccMap = null, chordBias = null) {
+            const sigInfo = getModalSignatureInfo(rootKey, mode);
             const octave = Math.floor(midi / 12) - 1; // C4 = 60 -> octave 4
             const pc = midiToPc(midi);
 
-            // Sharp vs Flat spelling maps: [diatonicLetterIndex (0..6), accidental ('', '#', 'b')]
+            // Sharp vs Flat spelling maps: [diatonicLetterIndex (0..6), accidental ('', '♯', '♭')]
             const sharpMap = [
                 [0, ''],  [0, '♯'], [1, ''],  [1, '♯'], [2, ''],  [3, ''],
                 [3, '♯'], [4, ''],  [4, '♯'], [5, ''],  [5, '♯'], [6, '']
@@ -1841,23 +2041,52 @@
                 [4, '♭'], [4, ''],  [5, '♭'], [5, ''],  [6, '♭'], [6, '']
             ];
 
-            const [letterIdx, rawAcc] = useFlats ? flatMap[pc] : sharpMap[pc];
-            const diatonicStepFromC4 = (octave - 4) * 7 + letterIdx;
-
-            // Determine whether the accidental is already implied by the key signature
             const sharpOrderLetters = [3, 0, 4, 1, 5, 2, 6]; // F, C, G, D, A, E, B
             const flatOrderLetters  = [6, 2, 5, 1, 4, 0, 3]; // B, E, A, D, G, C, F
+            const sharpPcOrder      = [6, 1, 8, 3, 10, 5, 0];
+            const flatPcOrder       = [10, 3, 8, 1, 6, 11, 4];
 
-            let impliedAcc = '';
-            if (keyInfo.sharps > 0 && sharpOrderLetters.slice(0, keyInfo.sharps).includes(letterIdx)) {
-                impliedAcc = '♯';
-            } else if (keyInfo.flats > 0 && flatOrderLetters.slice(0, keyInfo.flats).includes(letterIdx)) {
-                impliedAcc = '♭';
+            let letterIdx;
+            let rawAcc;
+            let effectiveOctave = octave;
+
+            if (sigInfo.flats >= 6 && pc === 11) {
+                letterIdx = 0; // Cb in 6-7 flat keys
+                rawAcc = '♭';
+                effectiveOctave = Math.floor((midi + 1) / 12) - 1;
+            } else if (sigInfo.flats >= 7 && pc === 4) {
+                letterIdx = 3; // Fb in 7 flat keys
+                rawAcc = '♭';
+            } else {
+                let useFlats = sigInfo.useFlats;
+                const inKeySharp = sigInfo.sharps > 0 && sharpPcOrder.slice(0, sigInfo.sharps).includes(pc);
+                const inKeyFlat = sigInfo.flats > 0 && flatPcOrder.slice(0, sigInfo.flats).includes(pc);
+                if (!inKeySharp && !inKeyFlat && chordBias) {
+                    if (chordBias.preferFlats) useFlats = true;
+                    else if (chordBias.preferSharps) useFlats = false;
+                }
+                [letterIdx, rawAcc] = useFlats ? flatMap[pc] : sharpMap[pc];
             }
 
+            const diatonicStepFromC4 = (effectiveOctave - 4) * 7 + letterIdx;
+
+            let keyImpliedAcc = '';
+            if (sigInfo.sharps > 0 && sharpOrderLetters.slice(0, sigInfo.sharps).includes(letterIdx)) {
+                keyImpliedAcc = '♯';
+            } else if (sigInfo.flats > 0 && flatOrderLetters.slice(0, sigInfo.flats).includes(letterIdx)) {
+                keyImpliedAcc = '♭';
+            }
+
+            const activeBaselineAcc = (measureStepAccMap && measureStepAccMap.has(diatonicStepFromC4))
+                ? measureStepAccMap.get(diatonicStepFromC4)
+                : keyImpliedAcc;
+
             let displayAccidental = '';
-            if (rawAcc !== impliedAcc) {
+            if (rawAcc !== activeBaselineAcc) {
                 displayAccidental = rawAcc === '' ? '♮' : rawAcc;
+            }
+            if (measureStepAccMap) {
+                measureStepAccMap.set(diatonicStepFromC4, rawAcc);
             }
 
             return {
@@ -1924,16 +2153,8 @@
             if (AppState.viewLayout === 'ribbon') {
                 // Single-system horizontal infinite ribbon
                 const height = container.clientHeight;
-                scoreCanvas.width = width * dpr;
-                scoreCanvas.height = height * dpr;
-                scoreCanvas.style.height = `${height}px`;
-
-                scoreCtx.save();
-                scoreCtx.scale(dpr, dpr);
-                scoreCtx.clearRect(0, 0, width, height);
-
+                syncCanvasBackingSize(width, height, dpr);
                 renderHorizontalRibbon(scoreCtx, width, height, palette);
-                scoreCtx.restore();
             } else {
                 // Multi-system page view (responsive for smartphone landscape and desktop, with generous vertical spacing)
                 const isCompact = container.clientHeight < 420 || width < 760;
@@ -1942,16 +2163,8 @@
                 const rowHeight = isCompact ? 225 : 285;
                 const totalHeight = Math.max(container.clientHeight, totalRows * rowHeight + 70);
 
-                scoreCanvas.width = width * dpr;
-                scoreCanvas.height = totalHeight * dpr;
-                scoreCanvas.style.height = `${totalHeight}px`;
-
-                scoreCtx.save();
-                scoreCtx.scale(dpr, dpr);
-                scoreCtx.clearRect(0, 0, width, totalHeight);
-
+                syncCanvasBackingSize(width, totalHeight, dpr);
                 renderPageSystems(scoreCtx, width, totalHeight, measuresPerRow, rowHeight, palette, isCompact);
-                scoreCtx.restore();
             }
         }
 
@@ -1985,6 +2198,12 @@
             restQuarter: '\uE4E5',        // Quarter rest (Soupir) centered on middle staff line
             rest8th: '\uE4E6',            // Eighth rest (Demi-soupir) centered on middle staff line
             timeSigDigit: (d) => String.fromCodePoint(0xE080 + (Number(d) || 0)),
+            timeSigString: (str) => String(str).split('').map((ch) => {
+                const n = Number(ch);
+                return Number.isInteger(n) && ch >= '0' && ch <= '9'
+                    ? String.fromCodePoint(0xE080 + n)
+                    : ch;
+            }).join(''),
             accidentalFromSymbol: (sym) => {
                 if (sym === '♯' || sym === '#') return '\uE262';
                 if (sym === '♭' || sym === 'b') return '\uE260';
@@ -1998,7 +2217,60 @@
         }
 
         // Draw authentic Engraved Grand Staff Brace (Accolade), Treble Clef, Bass Clef, Key Signature, and Time Signature
-        function drawSystemHeader(ctx, x, trebleTopY, bassTopY, lineGap, rootKey, timeSig, palette, isCompact = false) {
+        const KEY_SIG_STEPS = {
+            trebleSharp: [10, 7, 11, 8, 5, 9, 6],     // F#, C#, G#, D#, A#, E#, B#
+            bassSharp:   [-4, -7, -3, -6, -9, -5, -8],
+            trebleFlat:  [6, 9, 5, 8, 4, 7, 3],       // Bb, Eb, Ab, Db, Gb, Cb, Fb
+            bassFlat:    [-8, -5, -9, -6, -10, -7, -11]
+        };
+
+        function getKeySignatureAdvance(sigInfo, isCompact = false) {
+            const count = Math.max(sigInfo?.sharps || 0, sigInfo?.flats || 0);
+            if (count === 0) return 0;
+            const stepX = count >= 5 ? (isCompact ? 7.8 : 9.4) : (isCompact ? 9.5 : 11.2);
+            return count * stepX;
+        }
+
+        function drawKeySignatureGlyphs(ctx, startX, trebleTopY, bassTopY, lineGap, sigInfo, palette, isCompact = false) {
+            const sharps = sigInfo?.sharps || 0;
+            const flats = sigInfo?.flats || 0;
+            const count = Math.max(sharps, flats);
+            if (count === 0) return startX;
+
+            const useBravura = isBravuraLoaded();
+            const smuflFont = `${Math.round(lineGap * 4)}px "Bravura", serif`;
+            const accStepX = count >= 5 ? (isCompact ? 7.8 : 9.4) : (isCompact ? 9.5 : 11.2);
+            let cursorX = startX;
+
+            const isSharp = sharps > 0;
+            const tSteps = isSharp ? KEY_SIG_STEPS.trebleSharp : KEY_SIG_STEPS.trebleFlat;
+            const bSteps = isSharp ? KEY_SIG_STEPS.bassSharp : KEY_SIG_STEPS.bassFlat;
+            const smuflGlyph = isSharp ? SMUFL.accidentalSharp : SMUFL.accidentalFlat;
+            const fallbackGlyph = isSharp ? '♯' : '♭';
+            const fallbackOffset = isSharp ? 0.55 : 0.52;
+
+            for (let i = 0; i < count && i < 7; i++) {
+                const ty = stepToStaffY(tSteps[i], true, trebleTopY, lineGap);
+                const by = stepToStaffY(bSteps[i], false, bassTopY, lineGap);
+                if (useBravura) {
+                    ctx.font = smuflFont;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'alphabetic';
+                    drawHaloText(ctx, smuflGlyph, cursorX, ty, palette.ink, palette.bg, 2.0);
+                    drawHaloText(ctx, smuflGlyph, cursorX, by, palette.ink, palette.bg, 2.0);
+                } else {
+                    ctx.font = `600 ${Math.round(lineGap * 1.85)}px "Cormorant Garamond", Georgia, serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'alphabetic';
+                    drawHaloText(ctx, fallbackGlyph, cursorX, ty + lineGap * fallbackOffset, palette.ink, palette.bg, 2.2);
+                    drawHaloText(ctx, fallbackGlyph, cursorX, by + lineGap * fallbackOffset, palette.ink, palette.bg, 2.2);
+                }
+                cursorX += accStepX;
+            }
+            return cursorX;
+        }
+
+        function drawSystemHeader(ctx, x, trebleTopY, bassTopY, lineGap, rootKey, mode, timeSig, palette, isCompact = false) {
             const staffHeight = lineGap * 4;
             const bottomY = bassTopY + staffHeight;
             const totalGrandHeight = bottomY - trebleTopY;
@@ -2059,53 +2331,10 @@
                 ctx.fillText('𝄢', x + (isCompact ? 6 : 9), bassTopY + lineGap * 2.98);
             }
 
-            // 4. Key Signature accidentals with non-overlapping spacing
+            // 4. Key Signature accidentals using true modal key signature (up to 7 sharps/flats)
             let cursorX = x + (isCompact ? 36 : 45);
-            const accStepX = isCompact ? 9.5 : 11.2;
-            const keyInfo = KEY_SIGNATURES[rootKey] || KEY_SIGNATURES['C'];
-
-            // Sharp positions (step from C4) on Treble: F5(10), C5(7), G5(11), D5(8)
-            const trebleSharpSteps = [10, 7, 11, 8];
-            const bassSharpSteps   = [-4, -7, -3, -6];
-            // Flat positions on Treble: B4(6), E5(9), A4(5), D5(8)
-            const trebleFlatSteps  = [6, 9, 5, 8];
-            const bassFlatSteps    = [-8, -5, -9, -6];
-
-            if (keyInfo.sharps > 0) {
-                for (let i = 0; i < keyInfo.sharps; i++) {
-                    const ty = stepToStaffY(trebleSharpSteps[i], true, trebleTopY, lineGap);
-                    const by = stepToStaffY(bassSharpSteps[i], false, bassTopY, lineGap);
-                    if (useBravura) {
-                        ctx.font = smuflFont;
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'alphabetic';
-                        drawHaloText(ctx, SMUFL.accidentalSharp, cursorX, ty, palette.ink, palette.bg, 2.0);
-                        drawHaloText(ctx, SMUFL.accidentalSharp, cursorX, by, palette.ink, palette.bg, 2.0);
-                    } else {
-                        ctx.font = `600 ${Math.round(lineGap * 1.85)}px "Cormorant Garamond", Georgia, serif`;
-                        drawHaloText(ctx, '♯', cursorX, ty + lineGap * 0.55, palette.ink, palette.bg, 2.2);
-                        drawHaloText(ctx, '♯', cursorX, by + lineGap * 0.55, palette.ink, palette.bg, 2.2);
-                    }
-                    cursorX += accStepX;
-                }
-            } else if (keyInfo.flats > 0) {
-                for (let i = 0; i < keyInfo.flats; i++) {
-                    const ty = stepToStaffY(trebleFlatSteps[i], true, trebleTopY, lineGap);
-                    const by = stepToStaffY(bassFlatSteps[i], false, bassTopY, lineGap);
-                    if (useBravura) {
-                        ctx.font = smuflFont;
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'alphabetic';
-                        drawHaloText(ctx, SMUFL.accidentalFlat, cursorX, ty, palette.ink, palette.bg, 2.0);
-                        drawHaloText(ctx, SMUFL.accidentalFlat, cursorX, by, palette.ink, palette.bg, 2.0);
-                    } else {
-                        ctx.font = `600 ${Math.round(lineGap * 1.85)}px "Cormorant Garamond", Georgia, serif`;
-                        drawHaloText(ctx, '♭', cursorX, ty + lineGap * 0.52, palette.ink, palette.bg, 2.2);
-                        drawHaloText(ctx, '♭', cursorX, by + lineGap * 0.52, palette.ink, palette.bg, 2.2);
-                    }
-                    cursorX += accStepX;
-                }
-            }
+            const sigInfo = getModalSignatureInfo(rootKey, mode || 'major');
+            cursorX = drawKeySignatureGlyphs(ctx, cursorX, trebleTopY, bassTopY, lineGap, sigInfo, palette, isCompact);
 
             // 5. Engraved Time Signature numerals (SMuFL \uE080-\uE089)
             cursorX += isCompact ? 8 : 11;
@@ -2114,8 +2343,8 @@
             ctx.textBaseline = 'alphabetic';
             if (useBravura) {
                 ctx.font = smuflFont;
-                const numGlyph = SMUFL.timeSigDigit(num);
-                const denGlyph = SMUFL.timeSigDigit(den);
+                const numGlyph = SMUFL.timeSigString(num);
+                const denGlyph = SMUFL.timeSigString(den);
                 drawHaloText(ctx, numGlyph, cursorX + 7, trebleTopY + lineGap * 1, palette.ink, palette.bg, 2.2);
                 drawHaloText(ctx, denGlyph, cursorX + 7, trebleTopY + lineGap * 3, palette.ink, palette.bg, 2.2);
                 drawHaloText(ctx, numGlyph, cursorX + 7, bassTopY + lineGap * 1, palette.ink, palette.bg, 2.2);
@@ -2192,6 +2421,7 @@
                 bassTopY,
                 lineGap,
                 currentMeas.rootKey,
+                currentMeas.mode,
                 currentMeas.timeSig,
                 palette,
                 isCompact
@@ -2279,6 +2509,7 @@
                     bassTopY,
                     lineGap,
                     firstMeas.rootKey,
+                    firstMeas.mode,
                     firstMeas.timeSig,
                     palette,
                     isCompact
@@ -2314,15 +2545,80 @@
                         ctx.restore();
                     }
 
-                    drawSingleMeasure(ctx, measure, measX, measureWidth, trebleTopY, bassTopY, lineGap, palette, isCompact);
+                    drawSingleMeasure(ctx, measure, measX, measureWidth, trebleTopY, bassTopY, lineGap, palette, isCompact, col === 0);
                 }
             }
         }
 
+        function getKeyChangeWidth(prevSigInfo, sigInfo, isCompact = false) {
+            if (!prevSigInfo || !sigInfo || prevSigInfo.fifths === sigInfo.fifths) return 0;
+            const targetSig = (sigInfo.sharps === 0 && sigInfo.flats === 0) ? prevSigInfo : sigInfo;
+            return Math.ceil(getKeySignatureAdvance(targetSig, isCompact) + (isCompact ? 10 : 14));
+        }
+
+        function drawKeyChangeAtBarline(ctx, measX, trebleTopY, bassTopY, lineGap, prevSigInfo, sigInfo, palette, isCompact = false) {
+            const staffHeight = lineGap * 4;
+            // Draw engraved double thin barline before key change
+            ctx.save();
+            ctx.strokeStyle = palette.staffLine;
+            ctx.lineWidth = 1.15;
+            for (const dx of [0, 3.5]) {
+                ctx.beginPath();
+                ctx.moveTo(measX + dx, trebleTopY);
+                ctx.lineTo(measX + dx, bassTopY + staffHeight);
+                ctx.stroke();
+            }
+
+            const startX = measX + (isCompact ? 11 : 14);
+            if (sigInfo.sharps === 0 && sigInfo.flats === 0 && (prevSigInfo.sharps > 0 || prevSigInfo.flats > 0)) {
+                // Cancel previous accidentals with naturals
+                const count = Math.max(prevSigInfo.sharps, prevSigInfo.flats);
+                const tSteps = prevSigInfo.sharps > 0 ? KEY_SIG_STEPS.trebleSharp : KEY_SIG_STEPS.trebleFlat;
+                const bSteps = prevSigInfo.sharps > 0 ? KEY_SIG_STEPS.bassSharp : KEY_SIG_STEPS.bassFlat;
+                const useBravura = isBravuraLoaded();
+                const smuflFont = `${Math.round(lineGap * 4)}px "Bravura", serif`;
+                const stepX = count >= 5 ? (isCompact ? 7.8 : 9.4) : (isCompact ? 9.5 : 11.2);
+                let cx = startX;
+                for (let i = 0; i < count && i < 7; i++) {
+                    const ty = stepToStaffY(tSteps[i], true, trebleTopY, lineGap);
+                    const by = stepToStaffY(bSteps[i], false, bassTopY, lineGap);
+                    if (useBravura) {
+                        ctx.font = smuflFont;
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'alphabetic';
+                        drawHaloText(ctx, SMUFL.accidentalNatural, cx, ty, palette.ink, palette.bg, 2.0);
+                        drawHaloText(ctx, SMUFL.accidentalNatural, cx, by, palette.ink, palette.bg, 2.0);
+                    } else {
+                        ctx.font = `600 ${Math.round(lineGap * 1.85)}px "Cormorant Garamond", Georgia, serif`;
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'alphabetic';
+                        drawHaloText(ctx, '♮', cx, ty + lineGap * 0.54, palette.ink, palette.bg, 2.2);
+                        drawHaloText(ctx, '♮', cx, by + lineGap * 0.54, palette.ink, palette.bg, 2.2);
+                    }
+                    cx += stepX;
+                }
+            } else {
+                drawKeySignatureGlyphs(ctx, startX, trebleTopY, bassTopY, lineGap, sigInfo, palette, isCompact);
+            }
+            ctx.restore();
+        }
+
         // Draw all musical contents of a single measure with strict anti-overlap layout
-        function drawSingleMeasure(ctx, measure, measX, measWidth, trebleTopY, bassTopY, lineGap, palette, isCompact = false) {
+        function drawSingleMeasure(ctx, measure, measX, measWidth, trebleTopY, bassTopY, lineGap, palette, isCompact = false, suppressModKeySig = false) {
             const staffHeight = lineGap * 4;
             const midGrandY = (trebleTopY + staffHeight + bassTopY) / 2;
+
+            // Detect mid-stream key modulation from previous measure
+            const measArrIdx = AppState.measures.indexOf(measure);
+            const prevMeas = measArrIdx > 0 ? AppState.measures[measArrIdx - 1] : null;
+            const sigInfo = getModalSignatureInfo(measure.rootKey, measure.mode);
+            const prevSigInfo = prevMeas ? getModalSignatureInfo(prevMeas.rootKey, prevMeas.mode) : null;
+            const showModKeyChange = !suppressModKeySig && prevSigInfo && prevSigInfo.fifths !== sigInfo.fifths;
+            const keyChangeExtraW = showModKeyChange ? getKeyChangeWidth(prevSigInfo, sigInfo, isCompact) : 0;
+
+            if (showModKeyChange) {
+                drawKeyChangeAtBarline(ctx, measX, trebleTopY, bassTopY, lineGap, prevSigInfo, sigInfo, palette, isCompact);
+            }
 
             // Check if Beat 0 has any accidentals on Treble or Bass so we give extra left margin after the barline
             let beatZeroHasAccidental = false;
@@ -2330,7 +2626,7 @@
             for (const ev of checkEventsZero) {
                 if (!ev.isRest && ev.startBeat === 0 && ev.notes) {
                     for (const m of ev.notes) {
-                        if (midiToStaffStepAndAccidental(m, measure.rootKey).accidental) {
+                        if (midiToStaffStepAndAccidental(m, measure.rootKey, measure.mode, null, measure.chord).accidental) {
                             beatZeroHasAccidental = true;
                             break;
                         }
@@ -2339,7 +2635,7 @@
             }
 
             const basePadLeft = Math.max(isCompact ? 26 : 34, Math.round(lineGap * 2.9));
-            const padLeft = basePadLeft + (beatZeroHasAccidental ? Math.round(lineGap * 1.15) : 0);
+            const padLeft = basePadLeft + keyChangeExtraW + (beatZeroHasAccidental ? Math.round(lineGap * 1.15) : 0);
             const padRight = Math.max(isCompact ? 16 : 22, Math.round(lineGap * 1.8));
             const usableWidth = Math.max(72, measWidth - padLeft - padRight);
 
@@ -2369,7 +2665,7 @@
             for (const ev of rhPool) {
                 if (!ev.isRest && ev.notes) {
                     for (const midi of ev.notes) {
-                        const info = midiToStaffStepAndAccidental(midi, measure.rootKey);
+                        const info = midiToStaffStepAndAccidental(midi, measure.rootKey, measure.mode, null, measure.chord);
                         const ny = stepToStaffY(info.step, true, trebleTopY, lineGap);
                         // Account for upward stem or note name above the staff
                         const topExtent = ny < trebleTopY + lineGap * 2 ? (ny - lineGap * 1.6) : (ny - lineGap * 3.1);
@@ -2382,7 +2678,7 @@
             for (const ev of (measure.lhEvents || [])) {
                 if (!ev.isRest && ev.notes) {
                     for (const midi of ev.notes) {
-                        const info = midiToStaffStepAndAccidental(midi, measure.rootKey);
+                        const info = midiToStaffStepAndAccidental(midi, measure.rootKey, measure.mode, null, measure.chord);
                         const ny = stepToStaffY(info.step, false, bassTopY, lineGap);
                         const botExtent = ny > bassTopY + lineGap * 2 ? (ny + lineGap * 1.8) : (ny + lineGap * 3.1);
                         if (botExtent > lowestBassY) lowestBassY = botExtent;
@@ -2478,14 +2774,15 @@
             ctx.restore();
 
             // 3. Draw Right Hand (Treble) Events — or Guided Improvisation Diamond Targets
+            const measureBounds = { measX, measWidth };
             if (measure.isImprovisation) {
                 drawImprovisationGuideMeasure(ctx, measure, measX + padLeft, usableWidth, trebleTopY, lineGap, palette);
             } else {
-                drawStaffEvents(ctx, measure.rhEvents, measure, true, measX + padLeft, usableWidth, trebleTopY, midGrandY, lineGap, palette);
+                drawStaffEvents(ctx, measure.rhEvents, measure, true, measX + padLeft, usableWidth, trebleTopY, midGrandY, lineGap, palette, measureBounds);
             }
 
             // 4. Draw Left Hand (Bass) Events
-            drawStaffEvents(ctx, measure.lhEvents, measure, false, measX + padLeft, usableWidth, bassTopY, midGrandY, lineGap, palette);
+            drawStaffEvents(ctx, measure.lhEvents, measure, false, measX + padLeft, usableWidth, bassTopY, midGrandY, lineGap, palette, measureBounds);
 
             // 5. If Look-Ahead Measure Masking is active on current measure, draw subtle veil reminder in the middle gap
             if (AppState.lookAheadMode === 'measure' && measure.index === AppState.currentMeasureIndex && (AppState.isPlaying || AppState.currentBeatFloat > 0.05)) {
@@ -2509,7 +2806,7 @@
 
         // Draw diamond-shaped chord/guide-tone cues in Treble Staff for Guided Improvisation measures
         function drawImprovisationGuideMeasure(ctx, measure, startX, usableWidth, staffTopY, lineGap, palette) {
-            const keyInfo = KEY_SIGNATURES[measure.rootKey] || KEY_SIGNATURES['C'];
+            const sigInfo = getModalSignatureInfo(measure.rootKey, measure.mode);
             const guideMidis = measure.improGuideMidis || [62, 65, 69, 72];
             const count = guideMidis.length;
             const useBravura = isBravuraLoaded();
@@ -2539,7 +2836,7 @@
                 ctx.save();
                 if (isBeatMasked) ctx.globalAlpha = 0.10;
 
-                const info = midiToStaffStepAndAccidental(midi, measure.rootKey);
+                const info = midiToStaffStepAndAccidental(midi, measure.rootKey, measure.mode, null, measure.chord);
                 const y = stepToStaffY(info.step, true, staffTopY, lineGap);
                 const isGuide = measure.chord.guideTonePcs.has(info.pc);
 
@@ -2585,7 +2882,7 @@
                 }
 
                 // Always show note name + role (★ for Guide Tone) cleanly above the diamond with paper halo
-                const noteName = formatPitchClass(info.pc, keyInfo.useFlats, AppState.noteNameMode === 'en' ? 'en' : 'fr');
+                const noteName = formatPitchClass(info.pc, sigInfo.useFlats, AppState.noteNameMode === 'en' ? 'en' : 'fr', sigInfo.flats);
                 const roleTag = isGuide ? '★' : '';
                 ctx.font = `italic 600 ${Math.max(10, Math.round(lineGap * 1.05))}px "Cormorant Garamond", Georgia, serif`;
                 ctx.textAlign = 'left';
@@ -2706,10 +3003,11 @@
         }
 
         // Draw events (notes, rests, stems, beams, ledger lines, guide tones, note names, and Ear/Look-Ahead masks) for one staff
-        function drawStaffEvents(ctx, events, measure, isTreble, startX, usableWidth, staffTopY, midGrandY, lineGap, palette) {
-            const keyInfo = KEY_SIGNATURES[measure.rootKey] || KEY_SIGNATURES['C'];
+        function drawStaffEvents(ctx, events, measure, isTreble, startX, usableWidth, staffTopY, midGrandY, lineGap, palette, measureBounds = null) {
+            const sigInfo = getModalSignatureInfo(measure.rootKey, measure.mode);
             const useBravura = isBravuraLoaded();
             const smuflFont = `${(lineGap * 4).toFixed(1)}px Bravura, serif`;
+            const measureStepAccMap = new Map();
 
             // Check if entire measure is masked by Look-Ahead ('measure' mode)
             const isWholeMeasureLookAheadMasked = (
@@ -2745,7 +3043,7 @@
                 }
 
                 const noteInfos = ev.notes.map(midi => {
-                    const info = midiToStaffStepAndAccidental(midi, measure.rootKey);
+                    const info = midiToStaffStepAndAccidental(midi, measure.rootKey, measure.mode, measureStepAccMap, measure.chord);
                     const y = stepToStaffY(info.step, isTreble, staffTopY, lineGap);
                     const isGuide = measure.chord.guideTonePcs.has(info.pc);
                     return { midi, ...info, y, isGuide };
@@ -2804,53 +3102,86 @@
                 return {
                     ev, i, x, isCurrentlyPlaying, eventAlpha, isEarMystery: false, isNote: true,
                     noteInfos, bottomNote, topNote, stemUp, stemX, stemStartY, stemEndY,
-                    beamedWithNext: false, beamedWithPrev: false
+                    beamRole: null, beamEndItem: null
                 };
             });
 
-            // Pair consecutive eighth notes (0.5 beat) on the same integer beat for engraved sloped beaming
-            for (let i = 0; i < prepared.length - 1; i++) {
-                const a = prepared[i];
-                const b = prepared[i + 1];
-                if (
-                    a.isNote && b.isNote &&
-                    a.ev.durationBeats === 0.5 && b.ev.durationBeats === 0.5 &&
-                    Math.floor(a.ev.startBeat) === Math.floor(b.ev.startBeat) &&
-                    !a.beamedWithPrev
-                ) {
-                    const pairAvgY = (a.bottomNote.y + a.topNote.y + b.bottomNote.y + b.topNote.y) / 4;
-                    const pairStemUp = isTreble ? (pairAvgY >= middleLineY) : (pairAvgY > middleLineY);
-                    a.stemUp = pairStemUp;
-                    b.stemUp = pairStemUp;
+            // Group consecutive eighth notes (0.5 beat) within the same beat group (1.5 in 6/8 compound duple, 1.0 in simple meters)
+            const getBeamGroup = (startBeat) => measure.timeSig === '6/8'
+                ? Math.floor((startBeat + 0.001) / 1.5)
+                : Math.floor(startBeat + 0.001);
 
-                    // Recompute noteX if stem direction changed for the beamed pair
-                    for (const item of [a, b]) {
+            for (let idx = 0; idx < prepared.length; ) {
+                const first = prepared[idx];
+                if (!first.isNote || first.ev.durationBeats !== 0.5) {
+                    idx++;
+                    continue;
+                }
+                const targetGroup = getBeamGroup(first.ev.startBeat);
+                let endIdx = idx + 1;
+                while (
+                    endIdx < prepared.length &&
+                    prepared[endIdx].isNote &&
+                    prepared[endIdx].ev.durationBeats === 0.5 &&
+                    getBeamGroup(prepared[endIdx].ev.startBeat) === targetGroup
+                ) {
+                    endIdx++;
+                }
+
+                const run = prepared.slice(idx, endIdx);
+                if (run.length >= 2) {
+                    const groupAvgY = run.reduce((sum, it) => sum + (it.bottomNote.y + it.topNote.y) / 2, 0) / run.length;
+                    const groupStemUp = isTreble ? (groupAvgY >= middleLineY) : (groupAvgY > middleLineY);
+
+                    for (const item of run) {
+                        item.stemUp = groupStemUp;
                         for (const n of item.noteInfos) {
                             n.noteX = n.displaced
-                                ? (pairStemUp ? (item.x + rx * 1.88) : (item.x - rx * 1.88))
+                                ? (groupStemUp ? (item.x + rx * 1.88) : (item.x - rx * 1.88))
                                 : item.x;
                         }
-                        item.stemX = pairStemUp ? (item.x + rx - 0.6) : (item.x - rx + 0.6);
-                        item.stemStartY = pairStemUp ? (item.bottomNote.y - lineGap * 0.16) : (item.topNote.y + lineGap * 0.16);
+                        item.stemX = groupStemUp ? (item.x + rx - 0.6) : (item.x - rx + 0.6);
+                        item.stemStartY = groupStemUp ? (item.bottomNote.y - lineGap * 0.16) : (item.topNote.y + lineGap * 0.16);
                     }
 
-                    const rawEndA = pairStemUp ? (a.topNote.y - lineGap * 3.25) : (a.bottomNote.y + lineGap * 3.25);
-                    const rawEndB = pairStemUp ? (b.topNote.y - lineGap * 3.25) : (b.bottomNote.y + lineGap * 3.25);
+                    const last = run[run.length - 1];
+                    const spanX = Math.max(1, last.stemX - first.stemX);
+                    const stemLen = lineGap * 3.25;
+                    const rawEnds = run.map(it => groupStemUp ? (it.topNote.y - stemLen) : (it.bottomNote.y + stemLen));
 
-                    const dampedDiff = Math.max(-lineGap * 0.80, Math.min(lineGap * 0.80, (rawEndB - rawEndA) * 0.5));
-                    if (pairStemUp) {
-                        const baseHigh = Math.min(rawEndA, rawEndB - dampedDiff);
-                        a.stemEndY = baseHigh;
-                        b.stemEndY = baseHigh + dampedDiff;
+                    const maxSlope = lineGap * 0.80;
+                    const slopeDelta = Math.max(-maxSlope, Math.min(maxSlope, (rawEnds[rawEnds.length - 1] - rawEnds[0]) * 0.5));
+
+                    let startBeamY;
+                    if (groupStemUp) {
+                        startBeamY = Math.min(...run.map((it, k) => {
+                            const t = (it.stemX - first.stemX) / spanX;
+                            return rawEnds[k] - t * slopeDelta;
+                        }));
+                        if (!isTreble) {
+                            const minSafe = midGrandY + lineGap * 0.45;
+                            startBeamY = Math.max(startBeamY, minSafe, minSafe - slopeDelta);
+                        }
                     } else {
-                        const baseLow = Math.max(rawEndA, rawEndB - dampedDiff);
-                        a.stemEndY = baseLow;
-                        b.stemEndY = baseLow + dampedDiff;
+                        startBeamY = Math.max(...run.map((it, k) => {
+                            const t = (it.stemX - first.stemX) / spanX;
+                            return rawEnds[k] - t * slopeDelta;
+                        }));
+                        if (isTreble) {
+                            const maxSafe = midGrandY - lineGap * 0.45;
+                            startBeamY = Math.min(startBeamY, maxSafe, maxSafe - slopeDelta);
+                        }
                     }
 
-                    a.beamedWithNext = true;
-                    b.beamedWithPrev = true;
+                    for (let k = 0; k < run.length; k++) {
+                        const it = run[k];
+                        const t = (it.stemX - first.stemX) / spanX;
+                        it.stemEndY = startBeamY + t * slopeDelta;
+                        it.beamRole = k === 0 ? 'start' : (k === run.length - 1 ? 'end' : 'mid');
+                    }
+                    first.beamEndItem = last;
                 }
+                idx = endIdx;
             }
 
             // Track horizontal extent of Solfège / Note Name labels to prevent horizontal label collisions
@@ -2929,19 +3260,19 @@
                     ctx.stroke();
 
                     if (ev.durationBeats === 0.5) {
-                        if (item.beamedWithNext) {
-                            const nextItem = prepared[i + 1];
+                        if (item.beamRole === 'start' && item.beamEndItem) {
+                            const endItem = item.beamEndItem;
                             const beamThick = lineGap * 0.48;
                             const dir = stemUp ? 1 : -1;
                             ctx.fillStyle = stemColor;
                             ctx.beginPath();
                             ctx.moveTo(stemX - 0.6, stemEndY);
-                            ctx.lineTo(nextItem.stemX + 0.6, nextItem.stemEndY);
-                            ctx.lineTo(nextItem.stemX + 0.6, nextItem.stemEndY + beamThick * dir);
+                            ctx.lineTo(endItem.stemX + 0.6, endItem.stemEndY);
+                            ctx.lineTo(endItem.stemX + 0.6, endItem.stemEndY + beamThick * dir);
                             ctx.lineTo(stemX - 0.6, stemEndY + beamThick * dir);
                             ctx.closePath();
                             ctx.fill();
-                        } else if (!item.beamedWithPrev) {
+                        } else if (!item.beamRole) {
                             drawEngravedFlag(ctx, stemX, stemEndY, stemUp, lineGap, stemColor);
                         }
                     }
@@ -2967,7 +3298,7 @@
                     if (ev.durationBeats === 3 || ev.durationBeats === 1.5) {
                         const distFromTopInHalfGaps = Math.round((n.y - staffTopY) / (lineGap / 2));
                         const isOnLine = (distFromTopInHalfGaps % 2 === 0);
-                        const dotY = isOnLine ? (n.y - lineGap * 0.28) : n.y;
+                        const dotY = isOnLine ? (n.y - lineGap * 0.48) : n.y;
                         const dotX = rightmostNoteX + rx + lineGap * 0.52;
                         ctx.save();
                         ctx.fillStyle = fillColor;
@@ -3005,14 +3336,14 @@
                     if (isTreble) {
                         const uniqueLabels = [];
                         for (let k = noteInfos.length - 1; k >= 0; k--) {
-                            const nm = formatPitchClass(noteInfos[k].pc, keyInfo.useFlats, AppState.noteNameMode);
+                            const nm = formatPitchClass(noteInfos[k].pc, sigInfo.useFlats, AppState.noteNameMode, sigInfo.flats);
                             if (!uniqueLabels.includes(nm)) uniqueLabels.push(nm);
                             if (noteInfos[k].isGuide) hasGuide = true;
                         }
                         labelStr = uniqueLabels.slice(0, 2).join('·');
                     } else {
                         const targetN = noteInfos.find(n => n.isGuide) || bottomNote;
-                        labelStr = formatPitchClass(targetN.pc, keyInfo.useFlats, AppState.noteNameMode);
+                        labelStr = formatPitchClass(targetN.pc, sigInfo.useFlats, AppState.noteNameMode, sigInfo.flats);
                         hasGuide = Boolean(targetN.isGuide);
                     }
 
@@ -3065,10 +3396,21 @@
                     ctx.restore();
                 }
 
-                // 6. Draw Crescent Tie curve if marked (curves opposite to the stem direction, outside the notehead)
+                // 6. Draw Crescent Tie curves (incoming from previous barline and/or outgoing to next note/barline)
+                if (ev.isTiedFromPrev) {
+                    const leftmostNoteX = Math.min(...noteInfos.map(n => n.noteX));
+                    const inTieStartX = measureBounds ? (measureBounds.measX + 2) : (x - rx - 14);
+                    const inTieEndX = Math.max(inTieStartX + 6, leftmostNoteX - rx - 3);
+                    const curveUp = !stemUp;
+                    const tieY = curveUp ? (topNote.y - ry - 2) : (bottomNote.y + ry + 2);
+                    drawEngravedTie(ctx, inTieStartX, inTieEndX, tieY, curveUp, lineGap, palette.ink);
+                }
                 if (ev.tieToNext) {
                     const tieStartX = rightmostNoteX + rx + 3;
-                    const tieEndX = x + (ev.durationBeats / measure.beatsPerMeasure) * usableWidth - 5;
+                    const crossesBarline = ev.startBeat + ev.durationBeats >= measure.beatsPerMeasure - 0.05;
+                    const tieEndX = (crossesBarline && measureBounds)
+                        ? (measureBounds.measX + measureBounds.measWidth - 2)
+                        : (x + (ev.durationBeats / measure.beatsPerMeasure) * usableWidth - 5);
                     const curveUp = !stemUp;
                     const tieY = curveUp ? (topNote.y - ry - 2) : (bottomNote.y + ry + 2);
                     drawEngravedTie(ctx, tieStartX, tieEndX, tieY, curveUp, lineGap, palette.ink);
@@ -3131,11 +3473,7 @@
                     ? SMUFL.restHalf
                     : (durationBeats === 0.5 ? SMUFL.rest8th : SMUFL.restQuarter);
                 ctx.fillText(restGlyph, x, staffTopY + lineGap * 2);
-                ctx.restore();
-                return;
-            }
-
-            if (durationBeats >= 2) {
+            } else if (durationBeats >= 2) {
                 const midLineY = staffTopY + lineGap * 2;
                 const blockW = lineGap * 1.15;
                 const blockH = lineGap * 0.52;
@@ -3185,6 +3523,13 @@
                 ctx.closePath();
                 ctx.fill();
             }
+
+            // Augmentation dot for dotted half (3) or dotted quarter (1.5) rests
+            if (durationBeats === 3 || durationBeats === 1.5) {
+                ctx.beginPath();
+                ctx.arc(x + lineGap * 0.92, staffTopY + lineGap * 1.5, Math.max(1.8, lineGap * 0.19), 0, Math.PI * 2);
+                ctx.fill();
+            }
             ctx.restore();
         }
 
@@ -3211,12 +3556,12 @@
                 }
             }
 
-            // Trigger Right Hand events starting at this subBeat
+            // Trigger Right Hand events starting at this subBeat (skipping tied continuations & impro measures)
             // In a Guided Improvisation measure, mute the procedural Right Hand so the user can improvise freely over the Left Hand!
             if (!measure.isImprovisation) {
                 const rhVel = measure.isEarTraining ? 0.84 : 0.74; // Slightly emphasize melody in Ear Training measures
                 for (const ev of measure.rhEvents) {
-                    if (!ev.isRest && Math.abs(ev.startBeat - subBeat) < 0.05) {
+                    if (!ev.isRest && !ev.isTiedFromPrev && Math.abs(ev.startBeat - subBeat) < 0.05) {
                         const durSec = ev.durationBeats * beatDurationSec;
                         for (const midi of ev.notes) {
                             if (playSound) audioEngine.playNote(midi, durSec, rhVel);
@@ -3226,16 +3571,18 @@
             }
         }
 
-        // Gather expected pitch classes at current sub-beat for "Attente MIDI" mode
+        // Gather expected pitch classes at current sub-beat for "Attente MIDI/Micro" mode
         function getExpectedSubBeatNotes(measure, subBeat) {
             const expectedMidis = [];
-            for (const ev of measure.rhEvents) {
-                if (!ev.isRest && Math.abs(ev.startBeat - subBeat) < 0.05) {
-                    expectedMidis.push(...ev.notes);
+            if (!measure.isImprovisation) {
+                for (const ev of measure.rhEvents) {
+                    if (!ev.isRest && !ev.isTiedFromPrev && Math.abs(ev.startBeat - subBeat) < 0.05) {
+                        expectedMidis.push(...ev.notes);
+                    }
                 }
             }
             for (const ev of measure.lhEvents) {
-                if (!ev.isRest && Math.abs(ev.startBeat - subBeat) < 0.05) {
+                if (!ev.isRest && !ev.isTiedFromPrev && Math.abs(ev.startBeat - subBeat) < 0.05) {
                     expectedMidis.push(...ev.notes);
                 }
             }
@@ -3264,17 +3611,24 @@
 
             AppState.satisfiedSubBeatNotes.clear();
 
-            // If the new sub-beat has no notes starting on it, skip empty eighth subdivisions automatically
-            const nextMeasure = AppState.measures[AppState.currentMeasureIndex];
-            const expected = getExpectedSubBeatNotes(nextMeasure, AppState.currentBeatFloat);
-            if (expected.length === 0 && (AppState.scrollMode === 'midi_wait' || AppState.scrollMode === 'mic_wait')) {
-                let nextNext = AppState.currentBeatFloat + 0.5;
-                if (nextNext >= nextMeasure.beatsPerMeasure - 0.01) {
-                    AppState.currentMeasureIndex++;
-                    AppState.currentBeatFloat = 0;
-                    ensureInfiniteBuffer();
-                } else {
-                    AppState.currentBeatFloat = nextNext;
+            // Skip empty eighth subdivisions where neither hand has a new note onset (prevents stalls during holds/rests)
+            if (AppState.scrollMode === 'midi_wait' || AppState.scrollMode === 'mic_wait') {
+                let guard = 0;
+                while (guard < 16) {
+                    const nextMeasure = AppState.measures[AppState.currentMeasureIndex];
+                    if (!nextMeasure) break;
+                    const expected = getExpectedSubBeatNotes(nextMeasure, AppState.currentBeatFloat);
+                    if (expected.length > 0) break;
+                    const nextNext = AppState.currentBeatFloat + 0.5;
+                    if (nextNext >= nextMeasure.beatsPerMeasure - 0.01) {
+                        AppState.currentMeasureIndex++;
+                        AppState.currentBeatFloat = 0;
+                        ensureInfiniteBuffer();
+                        autoScrollPageModeIfNeeded();
+                    } else {
+                        AppState.currentBeatFloat = nextNext;
+                    }
+                    guard++;
                 }
             }
 
@@ -3367,9 +3721,11 @@
             }
 
             const rhExpected = [];
-            for (const ev of measure.rhEvents) {
-                if (!ev.isRest && Math.abs(ev.startBeat - subBeat) < 0.05) {
-                    rhExpected.push(...ev.notes);
+            if (!measure.isImprovisation) {
+                for (const ev of measure.rhEvents) {
+                    if (!ev.isRest && !ev.isTiedFromPrev && Math.abs(ev.startBeat - subBeat) < 0.05) {
+                        rhExpected.push(...ev.notes);
+                    }
                 }
             }
 
@@ -3441,7 +3797,7 @@
 
                     this.source = audioEngine.ctx.createMediaStreamSource(this.stream);
                     this.analyser = audioEngine.ctx.createAnalyser();
-                    this.analyser.fftSize = 4096;
+                    this.analyser.fftSize = 8192;
                     this.analyser.smoothingTimeConstant = 0.25;
                     this.source.connect(this.analyser);
 
@@ -3533,7 +3889,26 @@
 
                 if (bestLag <= 0 || bestCorr < 0.62) return null;
 
-                const freq = sampleRate / bestLag;
+                // Parabolic interpolation around bestLag for sub-sample frequency precision (critical above C5)
+                const corrAtLag = (lagVal) => {
+                    if (lagVal < minLag || lagVal > maxLag) return bestCorr - 0.1;
+                    let sP = 0, s1 = 0, s2 = 0;
+                    for (let i = 0; i < windowLen; i += 2) {
+                        const a = buf[i];
+                        const b = buf[i + lagVal];
+                        sP += a * b;
+                        s1 += a * a;
+                        s2 += b * b;
+                    }
+                    const d = Math.sqrt(s1 * s2);
+                    return d > 1e-8 ? (sP / d) : 0;
+                };
+                const cPrev = corrAtLag(bestLag - 1);
+                const cNext = corrAtLag(bestLag + 1);
+                const denom = cPrev - 2 * bestCorr + cNext;
+                const lagShift = Math.abs(denom) > 1e-6 ? Math.max(-0.5, Math.min(0.5, 0.5 * (cPrev - cNext) / denom)) : 0;
+
+                const freq = sampleRate / (bestLag + lagShift);
                 const midi = Math.round(69 + 12 * Math.log2(freq / 440));
                 if (midi < 33 || midi > 96) return null;
                 return midi;
@@ -3565,11 +3940,26 @@
                     const f0 = 440 * Math.pow(2, (midi - 69) / 12);
                     const bin1 = Math.round(f0 / binHz);
                     const bin2 = Math.round((f0 * 2) / binHz);
-                    if (bin1 <= 1 || bin2 >= this.freqBuf.length - 1) continue;
+                    if (bin1 <= 2 || bin2 >= this.freqBuf.length - 2) continue;
 
-                    const peak1 = Math.max(this.freqBuf[bin1 - 1], this.freqBuf[bin1], this.freqBuf[bin1 + 1]);
+                    // Locate local peak bin around fundamental and refine with parabolic interpolation
+                    let pBin = bin1;
+                    if (this.freqBuf[bin1 - 1] > this.freqBuf[pBin]) pBin = bin1 - 1;
+                    if (this.freqBuf[bin1 + 1] > this.freqBuf[pBin]) pBin = bin1 + 1;
+                    const yL = this.freqBuf[pBin - 1];
+                    const yC = this.freqBuf[pBin];
+                    const yR = this.freqBuf[pBin + 1];
+                    const pDenom = yL - 2 * yC + yR;
+                    const binShift = Math.abs(pDenom) > 1e-6 ? Math.max(-0.5, Math.min(0.5, 0.5 * (yL - yR) / pDenom)) : 0;
+                    const estFreq = (pBin + binShift) * binHz;
+
+                    // Reject adjacent semitone peaks outside ±0.6 semitones
+                    const semitoneErr = Math.abs(12 * Math.log2(estFreq / f0));
+                    if (semitoneErr > 0.60) continue;
+
+                    const peak1 = yC;
                     const peak2 = Math.max(this.freqBuf[bin2 - 1], this.freqBuf[bin2], this.freqBuf[bin2 + 1]);
-                    const score = peak1 * 0.7 + peak2 * 0.3;
+                    const score = peak1 * 0.7 + peak2 * 0.3 - semitoneErr * 4;
 
                     // Require the harmonic peak to stand well above the ambient noise floor
                     if (peak1 > -54 && (peak1 - avgDb) > 15 && score > bestScore) {
@@ -3616,8 +4006,8 @@
                 }
 
                 if (this.stableFrames >= 2) {
-                    const keyInfo = KEY_SIGNATURES[AppState.rootKey] || KEY_SIGNATURES['C'];
-                    const noteName = formatPitchClass(midiToPc(detectedMidi), keyInfo.useFlats, 'fr');
+                    const sigInfo = getModalSignatureInfo(AppState.rootKey, AppState.mode);
+                    const noteName = formatPitchClass(midiToPc(detectedMidi), sigInfo.useFlats, 'fr', sigInfo.flats);
                     const octave = Math.floor(detectedMidi / 12) - 1;
                     this.updateMicBadge(`🎙️ ${noteName}${octave}`);
 
@@ -3692,11 +4082,11 @@
          * 8. UI CONTROLS, PRESET MANAGEMENT & EVENT LISTENERS
          ***********************************************************************/
         function updateHeaderSummary() {
-            const keyInfo = KEY_SIGNATURES[AppState.rootKey] || KEY_SIGNATURES['C'];
+            const sigInfo = getModalSignatureInfo(AppState.rootKey, AppState.mode);
             const modeLabel = MODE_LABELS_FR[AppState.mode] || 'Majeur';
             const summaryEl = document.getElementById('harmonicSummaryText');
             if (summaryEl) {
-                summaryEl.textContent = `${keyInfo.labelFr} ${modeLabel} • ${AppState.timeSig} • Lecture infinie`;
+                summaryEl.textContent = `${sigInfo.labelFr} ${modeLabel} • ${AppState.timeSig} • Lecture infinie`;
             }
 
             const presetObj = STYLE_PRESETS[AppState.activePreset];
@@ -3706,9 +4096,24 @@
             }
         }
 
+        // Keep UI key selector & header badge synchronized with the measure currently under the playhead
+        function syncPlayheadKeyToUI() {
+            const measure = AppState.measures[AppState.currentMeasureIndex];
+            if (!measure) return;
+            if (AppState.rootKey !== measure.rootKey) {
+                AppState.rootKey = measure.rootKey;
+                const selKey = document.getElementById('selectRootKey');
+                if (selKey && selKey.value !== measure.rootKey) {
+                    selKey.value = measure.rootKey;
+                }
+                updateHeaderSummary();
+            }
+        }
+
         function updateHudInfo() {
             const measure = AppState.measures[AppState.currentMeasureIndex];
             if (!measure) return;
+            syncPlayheadKeyToUI();
             document.getElementById('hudMeasureNum').textContent = `${measure.index + 1}`;
             document.getElementById('hudCurrentChord').textContent = measure.chord.symbol;
             document.getElementById('hudCurrentRoman').textContent = measure.chord.roman;
@@ -3728,8 +4133,8 @@
                 }
                 const subBeat = Math.round(AppState.currentBeatFloat * 2) / 2;
                 const expected = getExpectedSubBeatNotes(measure, subBeat);
-                const keyInfo = KEY_SIGNATURES[measure.rootKey] || KEY_SIGNATURES['C'];
-                const names = expected.map(m => formatPitchClass(midiToPc(m), keyInfo.useFlats, 'fr'));
+                const sigInfo = getModalSignatureInfo(measure.rootKey, measure.mode);
+                const names = expected.map(m => formatPitchClass(midiToPc(m), sigInfo.useFlats, 'fr', sigInfo.flats));
                 document.getElementById('midiExpectedNotesLabel').textContent =
                     names.length > 0 ? [...new Set(names)].join(', ') : 'Silence';
             } else {
@@ -3900,6 +4305,7 @@
             AppState.activePreset = presetKey;
             AppState.tempo = p.tempo;
             AppState.rootKey = p.rootKey;
+            AppState.generationRootKey = p.rootKey;
             AppState.mode = p.mode;
             AppState.timeSig = p.timeSig;
             AppState.harmonicRichness = p.harmonicRichness;
@@ -3945,84 +4351,113 @@
         function renderSavedScenariosList() {
             const listEl = document.getElementById('savedScenariosList');
             const scenarios = loadSavedScenarios();
-            listEl.innerHTML = '';
+            listEl.replaceChildren();
 
             if (scenarios.length === 0) {
-                listEl.innerHTML = `<p class="text-[11px] text-studio-400 italic">Aucun scénario personnalisé enregistré.</p>`;
+                const emptyP = document.createElement('p');
+                emptyP.className = 'text-[11px] text-studio-400 italic';
+                emptyP.textContent = 'Aucun scénario personnalisé enregistré.';
+                listEl.appendChild(emptyP);
                 return;
             }
 
             scenarios.forEach((sc, idx) => {
                 const row = document.createElement('div');
                 row.className = 'flex items-center justify-between p-2 rounded-lg bg-studio-850 border border-studio-800 text-xs';
-                row.innerHTML = `
-                    <button data-load-idx="${idx}" class="text-left flex-1 hover:text-amber-300 transition truncate pr-2">
-                        <span class="font-medium">${sc.name}</span>
-                        <span class="text-[10px] font-mono text-studio-400 ml-1">(${sc.rootKey} ${MODE_LABELS_FR[sc.mode] || ''} • ${sc.timeSig})</span>
-                    </button>
-                    <button data-del-idx="${idx}" class="text-studio-400 hover:text-red-400 px-1.5" title="Supprimer">✕</button>
-                `;
-                listEl.appendChild(row);
-            });
 
-            listEl.querySelectorAll('[data-load-idx]').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const idx = Number(btn.getAttribute('data-load-idx'));
-                    const sc = loadSavedScenarios()[idx];
-                    if (!sc) return;
-                    AppState.tempo = sc.tempo;
-                    AppState.rootKey = sc.rootKey;
-                    AppState.mode = sc.mode;
-                    AppState.timeSig = sc.timeSig;
-                    AppState.harmonicRichness = sc.harmonicRichness;
-                    AppState.leftHandPattern = sc.leftHandPattern;
-                    AppState.rightHandDensity = Number(sc.rightHandDensity);
-                    AppState.intervalLeap = sc.intervalLeap;
-                    if (sc.soundType) setSoundType(sc.soundType, false);
+                const loadBtn = document.createElement('button');
+                loadBtn.className = 'text-left flex-1 hover:text-amber-300 transition truncate pr-2';
 
-                    document.getElementById('sliderTempo').value = sc.tempo;
-                    document.getElementById('valTempo').textContent = `${sc.tempo} BPM`;
-                    document.getElementById('selectRootKey').value = sc.rootKey;
-                    document.getElementById('selectMode').value = sc.mode;
-                    document.getElementById('selectTimeSig').value = sc.timeSig;
-                    document.getElementById('selectHarmonicRichness').value = sc.harmonicRichness;
-                    document.getElementById('selectLeftHandPattern').value = sc.leftHandPattern;
-                    document.getElementById('selectRightHandDensity').value = String(sc.rightHandDensity);
-                    document.getElementById('selectIntervalLeap').value = sc.intervalLeap;
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'font-medium';
+                nameSpan.textContent = String(sc.name || 'Scénario');
+
+                const metaSpan = document.createElement('span');
+                metaSpan.className = 'text-[10px] font-mono text-studio-400 ml-1';
+                metaSpan.textContent = `(${sc.rootKey} ${MODE_LABELS_FR[sc.mode] || ''} • ${sc.timeSig})`;
+
+                loadBtn.appendChild(nameSpan);
+                loadBtn.appendChild(metaSpan);
+                loadBtn.addEventListener('click', () => {
+                    const latest = loadSavedScenarios()[idx];
+                    if (!latest) return;
+                    AppState.activePreset = null;
+                    AppState.tempo = latest.tempo;
+                    AppState.rootKey = latest.rootKey;
+                    AppState.generationRootKey = latest.rootKey;
+                    AppState.mode = latest.mode;
+                    AppState.timeSig = latest.timeSig;
+                    AppState.harmonicRichness = latest.harmonicRichness;
+                    AppState.leftHandPattern = latest.leftHandPattern;
+                    AppState.rightHandDensity = Number(latest.rightHandDensity);
+                    AppState.intervalLeap = latest.intervalLeap;
+                    if (typeof latest.allowLedgerLines === 'boolean') {
+                        AppState.allowLedgerLines = latest.allowLedgerLines;
+                        document.getElementById('chkLedgerLines').checked = latest.allowLedgerLines;
+                    }
+                    if (typeof latest.progressiveModulation === 'boolean') {
+                        AppState.progressiveModulation = latest.progressiveModulation;
+                        document.getElementById('chkModulation').checked = latest.progressiveModulation;
+                    }
+                    if (latest.soundType) setSoundType(latest.soundType, false);
+                    if (typeof latest.reverb === 'number') setReverbAmount(latest.reverb);
+                    if (latest.lookAheadMode) setLookAheadMode(latest.lookAheadMode);
+                    if (typeof latest.earTrainingEnabled === 'boolean') setEarTrainingEnabled(latest.earTrainingEnabled);
+                    if (typeof latest.improMeasureEnabled === 'boolean') setImproMeasureEnabled(latest.improMeasureEnabled);
+
+                    document.getElementById('sliderTempo').value = latest.tempo;
+                    document.getElementById('valTempo').textContent = `${latest.tempo} BPM`;
+                    document.getElementById('selectRootKey').value = latest.rootKey;
+                    document.getElementById('selectMode').value = latest.mode;
+                    document.getElementById('selectTimeSig').value = latest.timeSig;
+                    document.getElementById('selectHarmonicRichness').value = latest.harmonicRichness;
+                    document.getElementById('selectLeftHandPattern').value = latest.leftHandPattern;
+                    document.getElementById('selectRightHandDensity').value = String(latest.rightHandDensity);
+                    document.getElementById('selectIntervalLeap').value = latest.intervalLeap;
 
                     rebuildScoreStream();
                 });
-            });
 
-            listEl.querySelectorAll('[data-del-idx]').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const idx = Number(btn.getAttribute('data-del-idx'));
+                const delBtn = document.createElement('button');
+                delBtn.className = 'text-studio-400 hover:text-red-400 px-1.5';
+                delBtn.title = 'Supprimer';
+                delBtn.textContent = '✕';
+                delBtn.addEventListener('click', () => {
                     const list = loadSavedScenarios();
                     list.splice(idx, 1);
                     localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
                     renderSavedScenariosList();
                 });
+
+                row.appendChild(loadBtn);
+                row.appendChild(delBtn);
+                listEl.appendChild(row);
             });
         }
 
-        // Toggle Play / Pause
+        // Toggle Play / Pause (or audition & step forward while in Wait modes)
         function togglePlayPause() {
             audioEngine.init();
-            AppState.isPlaying = !AppState.isPlaying;
-
             const iconPlay = document.getElementById('iconPlay');
             const iconPause = document.getElementById('iconPause');
             const label = document.getElementById('labelPlayPause');
+
+            if (AppState.scrollMode === 'midi_wait' || AppState.scrollMode === 'mic_wait') {
+                AppState.isPlaying = false;
+                iconPlay.classList.remove('hidden');
+                iconPause.classList.add('hidden');
+                label.textContent = 'Lecture';
+                advanceOneSubBeatStep(true);
+                return;
+            }
+
+            AppState.isPlaying = !AppState.isPlaying;
 
             if (AppState.isPlaying) {
                 iconPlay.classList.add('hidden');
                 iconPause.classList.remove('hidden');
                 label.textContent = 'Pause';
                 AppState.lastFrameTime = performance.now();
-
-                if (AppState.scrollMode === 'midi_wait' || AppState.scrollMode === 'mic_wait') {
-                    advanceOneSubBeatStep(true);
-                }
             } else {
                 iconPlay.classList.remove('hidden');
                 iconPause.classList.add('hidden');
@@ -4140,6 +4575,7 @@
             // Deep customization controls (live regeneration of upcoming buffer)
             document.getElementById('selectRootKey').addEventListener('change', (e) => {
                 AppState.rootKey = e.target.value;
+                AppState.generationRootKey = e.target.value;
                 refreshUpcomingMeasuresLive();
             });
             document.getElementById('selectMode').addEventListener('change', (e) => {
@@ -4148,6 +4584,7 @@
             });
             document.getElementById('chkModulation').addEventListener('change', (e) => {
                 AppState.progressiveModulation = e.target.checked;
+                refreshUpcomingMeasuresLive();
             });
             document.getElementById('selectHarmonicRichness').addEventListener('change', (e) => {
                 AppState.harmonicRichness = e.target.value;
@@ -4240,13 +4677,19 @@
                     name,
                     tempo: AppState.tempo,
                     soundType: AppState.soundType,
+                    reverb: Number(document.getElementById('sliderReverb').value),
                     rootKey: AppState.rootKey,
                     mode: AppState.mode,
                     timeSig: AppState.timeSig,
                     harmonicRichness: AppState.harmonicRichness,
                     leftHandPattern: AppState.leftHandPattern,
                     rightHandDensity: AppState.rightHandDensity,
-                    intervalLeap: AppState.intervalLeap
+                    intervalLeap: AppState.intervalLeap,
+                    allowLedgerLines: AppState.allowLedgerLines,
+                    progressiveModulation: AppState.progressiveModulation,
+                    lookAheadMode: AppState.lookAheadMode,
+                    earTrainingEnabled: AppState.earTrainingEnabled,
+                    improMeasureEnabled: AppState.improMeasureEnabled
                 });
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(list.slice(0, 12)));
                 input.value = '';
@@ -4289,6 +4732,9 @@
             });
 
             window.addEventListener('pointerup', () => {
+                isDraggingScore = false;
+            });
+            window.addEventListener('pointercancel', () => {
                 isDraggingScore = false;
             });
 
