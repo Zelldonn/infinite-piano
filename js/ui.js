@@ -706,20 +706,114 @@ function bindEventListeners() {
     window.addEventListener('orientationchange', () => {
         setTimeout(renderScore, 120);
     });
-}
 
-
-// Register offline Service Worker over HTTP/HTTPS origins (skipped on file://)
-function registerServiceWorker() {
-    if ('serviceWorker' in navigator && window.location.protocol !== 'file:') {
-        navigator.serviceWorker.register('./sw.js', { scope: './' }).catch((err) => {
-            console.warn('Service Worker registration failed:', err);
+    const btnInstallPWA = document.getElementById('btnInstallPWA');
+    if (btnInstallPWA) {
+        btnInstallPWA.addEventListener('click', async () => {
+            if (!deferredInstallPrompt) return;
+            deferredInstallPrompt.prompt();
+            await deferredInstallPrompt.userChoice;
+            deferredInstallPrompt = null;
+            updatePWAStatusUI();
         });
     }
 }
 
+let deferredInstallPrompt = null;
+let swRegistrationState = 'pending'; // 'pending' | 'ready' | 'error' | 'skipped'
+
+function updatePWAStatusUI() {
+    const badge = document.getElementById('pwaStatusBadge');
+    const text = document.getElementById('pwaStatusText');
+    const btn = document.getElementById('btnInstallPWA');
+    if (!badge || !text) return;
+
+    const isStandalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+        || window.navigator.standalone === true;
+
+    if (isStandalone) {
+        badge.textContent = 'App active';
+        badge.className = 'text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
+        text.textContent = 'Mode application hors-ligne actif (Bravura & partition en cache).';
+        if (btn) btn.classList.add('hidden');
+        return;
+    }
+
+    if (window.location.protocol === 'file:') {
+        badge.textContent = 'file://';
+        badge.className = 'text-[10px] font-mono px-1.5 py-0.5 rounded bg-studio-850 text-studio-400 border border-studio-700';
+        text.textContent = 'Ouverture locale directe (file://). L\'app fonctionne hors-ligne ici, mais l\'installation PWA exige HTTPS ou http://localhost.';
+        if (btn) btn.classList.add('hidden');
+        return;
+    }
+
+    if (window.isSecureContext === false) {
+        badge.textContent = 'HTTP LAN bloqué';
+        badge.className = 'text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40';
+        text.textContent = 'Un serveur Python HTTP sur IP LAN (192.168.x.x) est bloqué par le navigateur pour PWA/Micro. Utilisez HTTPS, localhost (ou adb reverse USB), ou un hébergement HTTPS statique.';
+        if (btn) btn.classList.add('hidden');
+        return;
+    }
+
+    if (deferredInstallPrompt) {
+        badge.textContent = 'Prêt';
+        badge.className = 'text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
+        text.textContent = 'Service Worker actif. Cliquez ci-dessous pour installer hors-ligne.';
+        if (btn) btn.classList.remove('hidden');
+        return;
+    }
+
+    if (swRegistrationState === 'ready') {
+        badge.textContent = 'Cache prêt';
+        badge.className = 'text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
+        text.textContent = 'Service Worker prêt : installez via le menu navigateur (Android : Installer / iOS Safari : Partager -> Écran d\'accueil).';
+    } else if (swRegistrationState === 'error') {
+        badge.textContent = 'Erreur SW';
+        badge.className = 'text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40';
+        text.textContent = 'Service Worker bloqué (certificat SSL invalide ou chemin incorrect).';
+    } else {
+        badge.textContent = 'En attente';
+        badge.className = 'text-[10px] font-mono px-1.5 py-0.5 rounded bg-studio-850 text-studio-400 border border-studio-700';
+        text.textContent = 'Initialisation du cache hors-ligne...';
+    }
+    if (btn) btn.classList.add('hidden');
+}
+
+function initPWAInstallPrompt() {
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredInstallPrompt = e;
+        updatePWAStatusUI();
+    });
+    window.addEventListener('appinstalled', () => {
+        deferredInstallPrompt = null;
+        updatePWAStatusUI();
+    });
+    updatePWAStatusUI();
+}
+
+// Register offline Service Worker over HTTP/HTTPS origins (skipped on file://)
+function registerServiceWorker() {
+    if (window.location.protocol === 'file:' || window.isSecureContext === false || !('serviceWorker' in navigator)) {
+        swRegistrationState = 'skipped';
+        updatePWAStatusUI();
+        return;
+    }
+    navigator.serviceWorker.register('./sw.js', { scope: './' })
+        .then(() => {
+            swRegistrationState = 'ready';
+            updatePWAStatusUI();
+        })
+        .catch((err) => {
+            swRegistrationState = 'error';
+            console.warn('Service Worker registration failed:', err);
+            updatePWAStatusUI();
+        });
+}
+
 // Application Bootstrap on window load
 window.onload = function () {
+    initPWAInstallPrompt();
     registerServiceWorker();
     bindEventListeners();
     renderSavedScenariosList();
