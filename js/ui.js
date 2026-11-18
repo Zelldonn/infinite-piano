@@ -179,6 +179,31 @@ function setReverbAmount(percentValue) {
     audioEngine.updateReverbMix(clamped / 100);
 }
 
+// Synchronize Master Volume slider (0..100%)
+function setMasterVolume(percentValue) {
+    const clamped = Math.max(0, Math.min(100, Number(percentValue)));
+    const slider = document.getElementById('sliderMasterVolume');
+    const label = document.getElementById('valMasterVolume');
+    if (slider) slider.value = String(clamped);
+    if (label) label.textContent = `${Math.round(clamped)}%`;
+    audioEngine.updateMasterVolume(clamped / 100);
+}
+
+// Synchronize LH <-> RH Mix Balance (-100 = LH solo, 0 = balanced, +100 = RH solo)
+function setHandBalance(percentValue) {
+    const clamped = Math.max(-100, Math.min(100, Math.round(Number(percentValue) || 0)));
+    AppState.handBalance = clamped / 100;
+    const slider = document.getElementById('sliderHandBalance');
+    const label = document.getElementById('valHandBalance');
+    if (slider) slider.value = String(clamped);
+    if (label) {
+        if (Math.abs(clamped) <= 5) label.textContent = 'Équil.';
+        else if (clamped <= -95) label.textContent = 'MG';
+        else if (clamped >= 95) label.textContent = 'MD';
+        else label.textContent = clamped < 0 ? `MG+${Math.abs(clamped)}` : `MD+${clamped}`;
+    }
+}
+
 // Synchronize Scroll Mode across Header, Drawer selectors, and Mic Wait quick-toggle button
 async function setScrollMode(modeValue) {
     AppState.scrollMode = modeValue;
@@ -198,6 +223,7 @@ async function setScrollMode(modeValue) {
 
     if (AppState.scrollMode === 'midi_wait' || AppState.scrollMode === 'mic_wait') {
         AppState.isPlaying = false;
+        stopAudioScheduler();
         document.getElementById('iconPlay').classList.remove('hidden');
         document.getElementById('iconPause').classList.add('hidden');
         document.getElementById('labelPlayPause').textContent = 'Lecture';
@@ -324,6 +350,8 @@ function renderSavedScenariosList() {
             }
             if (latest.soundType) setSoundType(latest.soundType, false);
             if (typeof latest.reverb === 'number') setReverbAmount(latest.reverb);
+            if (typeof latest.masterVolume === 'number') setMasterVolume(latest.masterVolume);
+            if (typeof latest.handBalance === 'number') setHandBalance(latest.handBalance);
             if (latest.lookAheadMode) setLookAheadMode(latest.lookAheadMode);
             if (typeof latest.earTrainingEnabled === 'boolean') setEarTrainingEnabled(latest.earTrainingEnabled);
             if (typeof latest.improMeasureEnabled === 'boolean') setImproMeasureEnabled(latest.improMeasureEnabled);
@@ -368,6 +396,7 @@ function togglePlayPause() {
 
     if (AppState.scrollMode === 'midi_wait' || AppState.scrollMode === 'mic_wait') {
         AppState.isPlaying = false;
+        stopAudioScheduler();
         iconPlay.classList.remove('hidden');
         iconPause.classList.add('hidden');
         label.textContent = 'Lecture';
@@ -382,7 +411,9 @@ function togglePlayPause() {
         iconPause.classList.remove('hidden');
         label.textContent = 'Pause';
         AppState.lastFrameTime = performance.now();
+        startAudioScheduler();
     } else {
+        stopAudioScheduler();
         iconPlay.classList.remove('hidden');
         iconPause.classList.add('hidden');
         label.textContent = 'Lecture';
@@ -449,12 +480,18 @@ function bindEventListeners() {
         setScrollMode(e.target.value);
     });
 
-    // Reverb sliders (Header & Drawer)
+    // Reverb, Master Volume & LH/RH Mix Balance sliders
     document.getElementById('sliderReverb').addEventListener('input', (e) => {
         setReverbAmount(e.target.value);
     });
     document.getElementById('sliderReverbDrawer').addEventListener('input', (e) => {
         setReverbAmount(e.target.value);
+    });
+    document.getElementById('sliderMasterVolume').addEventListener('input', (e) => {
+        setMasterVolume(e.target.value);
+    });
+    document.getElementById('sliderHandBalance').addEventListener('input', (e) => {
+        setHandBalance(e.target.value);
     });
 
     // Metronome button
@@ -602,6 +639,8 @@ function bindEventListeners() {
             tempo: AppState.tempo,
             soundType: AppState.soundType,
             reverb: Number(document.getElementById('sliderReverb').value),
+            masterVolume: Math.round(AppState.masterVolume * 100),
+            handBalance: Math.round(AppState.handBalance * 100),
             rootKey: AppState.rootKey,
             mode: AppState.mode,
             timeSig: AppState.timeSig,
@@ -657,6 +696,9 @@ function bindEventListeners() {
     });
 
     window.addEventListener('pointerup', () => {
+        if (isDraggingScore && hasDraggedSignificantly && AppState.isPlaying) {
+            resyncAudioScheduler();
+        }
         isDraggingScore = false;
     });
     window.addEventListener('pointercancel', () => {
@@ -683,7 +725,9 @@ function bindEventListeners() {
                 if (meas && meas.isEarTraining && !meas.earRevealed && box.beat > 0) {
                     meas.earRevealed = true;
                 }
-                if (meas) {
+                if (AppState.isPlaying) {
+                    resyncAudioScheduler();
+                } else if (meas) {
                     triggerMeasureBeatAudio(meas, box.beat, true);
                 }
                 updateHudInfo();

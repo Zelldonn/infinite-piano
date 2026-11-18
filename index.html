@@ -208,6 +208,22 @@
                             </div>
                         </div>
                     </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[11px] text-studio-400 mb-1">Volume Général</label>
+                            <div class="flex items-center gap-2 bg-studio-850 px-2.5 py-2 rounded-lg border border-studio-700">
+                                <input id="sliderMasterVolume" type="range" min="0" max="100" value="88" class="w-full">
+                                <span id="valMasterVolume" class="text-[11px] font-mono text-parchment-200 w-9 text-right">88%</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] text-studio-400 mb-1">Balance MG ↔ MD</label>
+                            <div class="flex items-center gap-2 bg-studio-850 px-2.5 py-2 rounded-lg border border-studio-700">
+                                <input id="sliderHandBalance" type="range" min="-100" max="100" value="0" class="w-full">
+                                <span id="valHandBalance" class="text-[11px] font-mono text-parchment-200 w-9 text-right">Équil.</span>
+                            </div>
+                        </div>
+                    </div>
                 </section>
 
                 <hr class="border-studio-800">

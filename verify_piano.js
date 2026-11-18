@@ -170,6 +170,8 @@ const context = {
     },
     alert() {},
     setTimeout() {},
+    setInterval: () => 42,
+    clearInterval() {},
     window: {
         devicePixelRatio: 2,
         isSecureContext: true,
@@ -177,10 +179,18 @@ const context = {
         matchMedia: () => ({ matches: false }),
         addEventListener() {},
         AudioContext: function MockAudioContext() {
-            const noopParam = { setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {}, setTargetAtTime() {} };
+            const noopParam = {
+                value: 0.5,
+                setValueAtTime() {},
+                linearRampToValueAtTime() {},
+                exponentialRampToValueAtTime() {},
+                setTargetAtTime() {},
+                cancelScheduledValues() {}
+            };
             const node = () => ({
                 connect() { return this; },
                 gain: noopParam,
+                pan: noopParam,
                 frequency: noopParam,
                 detune: noopParam,
                 Q: noopParam,
@@ -200,6 +210,7 @@ const context = {
                 sampleRate: 44100,
                 state: 'running',
                 destination: {},
+                pannerCount: 0,
                 resume() { return Promise.resolve(); },
                 createGain: node,
                 createOscillator: node,
@@ -208,6 +219,7 @@ const context = {
                 createConvolver: node,
                 createWaveShaper: node,
                 createBufferSource: node,
+                createStereoPanner() { this.pannerCount++; return node(); },
                 createBuffer: (ch = 1, len = 128) => ({ getChannelData: () => new Float32Array(len) })
             };
         }
@@ -607,4 +619,81 @@ context.renderScore();
 context.document.fonts.check = () => true;
 context.updatePresetCardHighlights(null);
 
-console.log('✓ All PWA, CSS, DOM, module separation, bug-fix regression, unit & integration checks passed!');
+// Test I: Core Technical & UX Improvements (Lookahead Scheduler, Stereo Panning, MIDI NoteOff/CC64, Dynamics, Volume/Balance)
+// I1. Stereo Keyboard Panning (bass left -> middle center -> treble right)
+engine.init();
+const pannersBefore = engine.ctx.pannerCount;
+assert(engine.getPanForMidi(36) < -0.2, 'Bass C2 should pan left');
+assert.strictEqual(engine.getPanForMidi(60), 0, 'Middle C4 should pan center');
+assert(engine.getPanForMidi(84) > 0.2, 'Treble C6 should pan right');
+engine.playNote(60, 0.8, 0.7);
+assert(engine.ctx.pannerCount > pannersBefore, 'playNote must route voices through StereoPannerNode');
+
+// I2. Real Web MIDI Note-On / Note-Off & Sustain Pedal (CC 64)
+engine.setSustainPedal(false);
+context.handleUserNoteOn(60, 0.8);
+assert.strictEqual(engine.liveVoices.has(60), true, 'noteOn must track active voice');
+context.handleUserNoteOff(60);
+assert.strictEqual(engine.liveVoices.has(60), false, 'noteOff without pedal must damp voice immediately');
+
+context.handleUserNoteOn(64, 0.8);
+engine.setSustainPedal(true);
+context.handleUserNoteOff(64);
+assert.strictEqual(engine.liveVoices.has(64), true, 'Sustain pedal CC64 must hold released note');
+assert.strictEqual(engine.sustainedReleasedNotes.has(64), true);
+engine.setSustainPedal(false);
+assert.strictEqual(engine.liveVoices.has(64), false, 'Lifting sustain pedal must release all held notes');
+assert.strictEqual(engine.sustainedReleasedNotes.size, 0);
+
+// I3. Master Volume & LH/RH Balance controls
+context.setMasterVolume(50);
+assert.strictEqual(appState.masterVolume, 0.5);
+assert.strictEqual(getEl('valMasterVolume').textContent, '50%');
+context.setHandBalance(-100);
+assert.deepStrictEqual({ ...context.getHandBalanceGains() }, { lhScale: 1, rhScale: 0 });
+assert.strictEqual(getEl('valHandBalance').textContent, 'MG');
+context.setHandBalance(100);
+assert.deepStrictEqual({ ...context.getHandBalanceGains() }, { lhScale: 0, rhScale: 1 });
+assert.strictEqual(getEl('valHandBalance').textContent, 'MD');
+context.setHandBalance(0);
+assert.deepStrictEqual({ ...context.getHandBalanceGains() }, { lhScale: 1, rhScale: 1 });
+assert.strictEqual(getEl('valHandBalance').textContent, 'Équil.');
+
+// I4. 8-bar Phrase-Arch Expressive Dynamics (bar 6 climax louder than bar 8 cadence)
+const velClimax = context.computeExpressiveVelocity(0.74, { barInPeriod: 5 }, 0, 1);
+const velCadence = context.computeExpressiveVelocity(0.74, { barInPeriod: 7 }, 0, 1);
+assert(velClimax > velCadence + 0.10, `Bar 6 climax (${velClimax.toFixed(3)}) must be stronger than bar 8 cadence (${velCadence.toFixed(3)})`);
+
+// I5. Sample-Accurate Web Audio Lookahead Scheduler & AudioContext-locked visual playhead
+const scheduler = runInVm('AudioLookaheadScheduler');
+appState.scrollMode = 'continuous';
+appState.timeSig = '4/4';
+appState.tempo = 120; // 0.5s per beat, 0.25s per sub-beat
+context.rebuildScoreStream();
+appState.isPlaying = true;
+appState.currentMeasureIndex = 0;
+appState.currentBeatFloat = 0;
+engine.ctx.currentTime = 1.0;
+context.startAudioScheduler();
+assert(scheduler.anchors.length >= 1, 'Lookahead scheduler must seed initial anchor');
+assert(Math.abs(scheduler.anchors[0].audioTime - 1.025) < 1e-6);
+
+// Advance AudioContext clock in 100ms steps across 1 full 4/4 measure (2.0s = 4 beats at 120 BPM)
+for (let t = 1.125; t <= 3.03; t += 0.1) {
+    engine.ctx.currentTime = t;
+    context.syncVisualPlayheadFromAudioClock();
+}
+assert.strictEqual(appState.currentMeasureIndex, 1, 'Playhead must cross cleanly into measure 1 at exact AudioContext barline');
+assert(appState.currentBeatFloat < 0.1, `Expected beat near 0 on measure entry, got ${appState.currentBeatFloat}`);
+
+// Background-tab sleep guard (+10s jump must NOT blast catch-up bursts)
+const anchorsBeforeJump = scheduler.anchors.length;
+engine.ctx.currentTime += 10.0;
+context.pumpAudioScheduler();
+assert(scheduler.anchors.length <= anchorsBeforeJump + 2, 'Background tab wake-up must recover without scheduling catch-up bursts');
+context.stopAudioScheduler();
+appState.isPlaying = false;
+assert.strictEqual(scheduler.timerId, null);
+assert.strictEqual(scheduler.anchors.length, 0);
+
+console.log('✓ All PWA, CSS, DOM, scheduler, audio, MIDI, bug-fix & integration checks passed!');

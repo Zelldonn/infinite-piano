@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'atelier-piano-v2';
+const CACHE_VERSION = 'atelier-piano-v3';
 const APP_SHELL = [
     './',
     './index.html',

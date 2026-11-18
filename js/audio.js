@@ -1,5 +1,7 @@
 /***********************************************************************
  * 3. WEB AUDIO API — MULTI-TIMBRE PIANO SYNTHESIZER (CLASSICAL GRAND DEFAULT)
+ * Supports sample-accurate lookahead scheduling, stereo key-panning,
+ * master volume control, and live MIDI Note-Off + Sustain Pedal (CC 64).
  ***********************************************************************/
 class PianoAudioEngine {
     constructor() {
@@ -11,6 +13,11 @@ class PianoAudioEngine {
         this.noiseBuffer = null;
         this.isInitialized = false;
         this.lastSynthPlayTimestamp = 0;
+
+        // Live MIDI voice tracking for realistic key-release & damper pedal (CC 64)
+        this.liveVoices = new Map();
+        this.sustainPedalDown = false;
+        this.sustainedReleasedNotes = new Set();
     }
 
     // Initialize AudioContext on first user interaction
@@ -25,7 +32,7 @@ class PianoAudioEngine {
         this.ctx = new AudioCtx();
 
         this.masterGain = this.ctx.createGain();
-        this.masterGain.gain.value = 0.88;
+        this.masterGain.gain.value = typeof AppState.masterVolume === 'number' ? AppState.masterVolume : 0.88;
 
         // Stereo compressor to prevent clipping on rich chords while preserving dynamic range
         this.compressor = this.ctx.createDynamicsCompressor();
@@ -89,6 +96,14 @@ class PianoAudioEngine {
         return impulse;
     }
 
+    updateMasterVolume(normValue) {
+        const clamped = Math.max(0, Math.min(1, Number(normValue)));
+        AppState.masterVolume = clamped;
+        if (!this.isInitialized || !this.masterGain) return;
+        const now = this.ctx.currentTime;
+        this.masterGain.gain.setTargetAtTime(clamped, now, 0.03);
+    }
+
     updateReverbMix(normValue) {
         AppState.reverbAmount = normValue;
         if (!this.isInitialized) return;
@@ -97,29 +112,126 @@ class PianoAudioEngine {
         this.wetGain.gain.setTargetAtTime(normValue * 0.85, now, 0.05);
     }
 
-    // Dispatch note synthesis according to selected Sound Type
-    playNote(midi, durationSec = 1.5, velocity = 0.68) {
-        this.init();
-        if (typeof performance !== 'undefined' && performance.now) {
-            this.lastSynthPlayTimestamp = performance.now();
+    // Compute subtle pianist-perspective stereo pan (bass left -> treble right)
+    getPanForMidi(midi) {
+        return Math.max(-0.48, Math.min(0.48, ((midi - 60) / 36) * 0.42));
+    }
+
+    // Route a voice gain node through a stereo panner into masterGain (with safe fallback)
+    connectVoiceToMaster(voiceNode, midi, when) {
+        if (typeof this.ctx.createStereoPanner === 'function') {
+            const panner = this.ctx.createStereoPanner();
+            panner.pan.setValueAtTime(this.getPanForMidi(midi), when);
+            voiceNode.connect(panner);
+            panner.connect(this.masterGain);
+            return panner;
         }
+        voiceNode.connect(this.masterGain);
+        return this.masterGain;
+    }
+
+    resolveStartTime(startTime) {
+        if (typeof startTime === 'number' && Number.isFinite(startTime) && startTime > this.ctx.currentTime) {
+            return startTime;
+        }
+        return this.ctx.currentTime;
+    }
+
+    markSynthPlaybackTimestamp(when) {
+        if (typeof performance !== 'undefined' && performance.now) {
+            const leadMs = Math.max(0, (when - this.ctx.currentTime) * 1000);
+            this.lastSynthPlayTimestamp = Math.max(this.lastSynthPlayTimestamp, performance.now() + leadMs);
+        }
+    }
+
+    // Dispatch note synthesis according to selected Sound Type & optional AudioContext timestamp
+    playNote(midi, durationSec = 1.5, velocity = 0.68, startTime = null) {
+        this.init();
+        const when = this.resolveStartTime(startTime);
+        this.markSynthPlaybackTimestamp(when);
         const type = AppState.soundType || 'classical';
         if (type === 'classical') {
-            this.playClassicalGrandNote(midi, durationSec, velocity, false);
+            return this.playClassicalGrandNote(midi, durationSec, velocity, false, when);
         } else if (type === 'bright') {
-            this.playClassicalGrandNote(midi, durationSec, velocity, true);
+            return this.playClassicalGrandNote(midi, durationSec, velocity, true, when);
         } else if (type === 'felt') {
-            this.playFeltPianoNote(midi, durationSec, velocity);
+            return this.playFeltPianoNote(midi, durationSec, velocity, when);
         } else if (type === 'electric') {
-            this.playElectricPianoNote(midi, durationSec, velocity);
+            return this.playElectricPianoNote(midi, durationSec, velocity, when);
         } else if (type === 'harpsichord') {
-            this.playHarpsichordNote(midi, durationSec, velocity);
+            return this.playHarpsichordNote(midi, durationSec, velocity, when);
+        }
+        return null;
+    }
+
+    // Live MIDI key press (sustains smoothly until noteOff or sustain pedal release)
+    noteOn(midi, velocity = 0.75) {
+        this.init();
+        this.sustainedReleasedNotes.delete(midi);
+        const prev = this.liveVoices.get(midi);
+        if (prev) {
+            this.releaseVoiceHandle(prev, 0.045);
+            this.liveVoices.delete(midi);
+        }
+        const handle = this.playNote(midi, 5.5, velocity, null);
+        if (handle) {
+            this.liveVoices.set(midi, handle);
+        }
+    }
+
+    // Live MIDI key release (honors damper sustain pedal CC 64)
+    noteOff(midi) {
+        if (!this.liveVoices.has(midi)) return;
+        if (this.sustainPedalDown) {
+            this.sustainedReleasedNotes.add(midi);
+            return;
+        }
+        const handle = this.liveVoices.get(midi);
+        this.liveVoices.delete(midi);
+        this.releaseVoiceHandle(handle, 0.14);
+    }
+
+    // Handle MIDI Sustain Pedal (CC 64): holds released keys until pedal lifts
+    setSustainPedal(isDown) {
+        const down = Boolean(isDown);
+        if (this.sustainPedalDown === down) return;
+        this.sustainPedalDown = down;
+        if (!down) {
+            for (const midi of this.sustainedReleasedNotes) {
+                const handle = this.liveVoices.get(midi);
+                if (handle) {
+                    this.releaseVoiceHandle(handle, 0.16);
+                    this.liveVoices.delete(midi);
+                }
+            }
+            this.sustainedReleasedNotes.clear();
+        }
+    }
+
+    // Smooth felt-damper release for an active live MIDI voice
+    releaseVoiceHandle(handle, releaseSec = 0.14) {
+        if (!handle || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const gainParam = handle.voiceGain && handle.voiceGain.gain;
+        if (gainParam) {
+            if (typeof gainParam.cancelScheduledValues === 'function') {
+                gainParam.cancelScheduledValues(now);
+            }
+            const curVal = (typeof gainParam.value === 'number' && gainParam.value > 0.0002)
+                ? gainParam.value
+                : (handle.peakAmp * 0.45);
+            gainParam.setValueAtTime(Math.max(0.0002, curVal), now);
+            gainParam.exponentialRampToValueAtTime(0.0001, now + releaseSec);
+        }
+        const stopAt = now + releaseSec + 0.03;
+        for (const osc of (handle.oscillators || [])) {
+            try { osc.stop(stopAt); } catch (_) {}
         }
     }
 
     // 1 & 2. Classical Concert Grand Piano & Bright Studio Grand synthesis
-    playClassicalGrandNote(midi, durationSec, velocity, isBright = false) {
-        const now = this.ctx.currentTime;
+    playClassicalGrandNote(midi, durationSec, velocity, isBright = false, startTime = null) {
+        const now = this.resolveStartTime(startTime);
         const freq = 440 * Math.pow(2, (midi - 69) / 12);
 
         // Register balance across 88 keys
@@ -185,9 +297,6 @@ class PianoAudioEngine {
         osc4Gain.gain.setValueAtTime(isBright ? 0.14 : 0.09, now);
         osc4Gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
 
-        // Crisp acoustic hammer key-strike transient
-        this.triggerClassicalHammerStrike(now, freq, amp * (isBright ? 0.38 : 0.26));
-
         osc1.connect(filter);
         osc2.connect(osc2Gain);
         osc2Gain.connect(filter);
@@ -197,7 +306,10 @@ class PianoAudioEngine {
         osc4Gain.connect(filter);
 
         filter.connect(voiceGain);
-        voiceGain.connect(this.masterGain);
+        const destNode = this.connectVoiceToMaster(voiceGain, midi, now);
+
+        // Crisp acoustic hammer key-strike transient positioned at the same stereo pan
+        this.triggerClassicalHammerStrike(now, freq, amp * (isBright ? 0.38 : 0.26), destNode);
 
         const stopAt = now + releaseTime + 0.5;
         osc1.start(now);
@@ -208,10 +320,13 @@ class PianoAudioEngine {
         osc2.stop(stopAt);
         osc3.stop(stopAt);
         osc4.stop(stopAt);
+
+        return { voiceGain, peakAmp: amp, oscillators: [osc1, osc2, osc3, osc4] };
     }
 
     // Realistic acoustic hammer impact (filtered noise burst + soundboard woody ping)
-    triggerClassicalHammerStrike(now, freq, level) {
+    triggerClassicalHammerStrike(now, freq, level, destNode = null) {
+        const target = destNode || this.masterGain;
         if (this.noiseBuffer) {
             const noise = this.ctx.createBufferSource();
             noise.buffer = this.noiseBuffer;
@@ -224,7 +339,7 @@ class PianoAudioEngine {
             ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.025);
             noise.connect(bp);
             bp.connect(ng);
-            ng.connect(this.masterGain);
+            ng.connect(target);
             noise.start(now);
         }
 
@@ -237,14 +352,14 @@ class PianoAudioEngine {
         g.gain.setValueAtTime(level * 0.55, now);
         g.gain.exponentialRampToValueAtTime(0.0001, now + 0.032);
         osc.connect(g);
-        g.connect(this.masterGain);
+        g.connect(target);
         osc.start(now);
         osc.stop(now + 0.036);
     }
 
     // 3. Intimate Felt Piano synthesis
-    playFeltPianoNote(midi, durationSec, velocity) {
-        const now = this.ctx.currentTime;
+    playFeltPianoNote(midi, durationSec, velocity, startTime = null) {
+        const now = this.resolveStartTime(startTime);
         const freq = 440 * Math.pow(2, (midi - 69) / 12);
         const registerScale = midi < 48 ? 0.85 : (midi > 76 ? 0.65 : 0.78);
         const amp = Math.min(1, Math.max(0.1, velocity)) * registerScale * 0.28;
@@ -279,14 +394,14 @@ class PianoAudioEngine {
         osc3Gain.gain.setValueAtTime(0.10, now);
         osc3Gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
 
-        this.triggerClassicalHammerStrike(now, freq * 0.5, amp * 0.18);
-
         osc1.connect(filter);
         osc2.connect(filter);
         osc3.connect(osc3Gain);
         osc3Gain.connect(filter);
         filter.connect(voiceGain);
-        voiceGain.connect(this.masterGain);
+        const destNode = this.connectVoiceToMaster(voiceGain, midi, now);
+
+        this.triggerClassicalHammerStrike(now, freq * 0.5, amp * 0.18, destNode);
 
         const stopAt = now + releaseTime + 0.45;
         osc1.start(now);
@@ -295,11 +410,13 @@ class PianoAudioEngine {
         osc1.stop(stopAt);
         osc2.stop(stopAt);
         osc3.stop(stopAt);
+
+        return { voiceGain, peakAmp: amp, oscillators: [osc1, osc2, osc3] };
     }
 
     // 4. Warm Electric Piano (Rhodes Tine & Tonebar style)
-    playElectricPianoNote(midi, durationSec, velocity) {
-        const now = this.ctx.currentTime;
+    playElectricPianoNote(midi, durationSec, velocity, startTime = null) {
+        const now = this.resolveStartTime(startTime);
         const freq = 440 * Math.pow(2, (midi - 69) / 12);
         const amp = Math.min(1, Math.max(0.1, velocity)) * 0.24;
         const releaseTime = Math.max(0.8, durationSec * 1.4);
@@ -334,7 +451,7 @@ class PianoAudioEngine {
         osc2Gain.connect(voiceGain);
         tineOsc.connect(tineGain);
         tineGain.connect(voiceGain);
-        voiceGain.connect(this.masterGain);
+        this.connectVoiceToMaster(voiceGain, midi, now);
 
         const stopAt = now + releaseTime + 0.35;
         osc1.start(now);
@@ -343,11 +460,13 @@ class PianoAudioEngine {
         osc1.stop(stopAt);
         osc2.stop(stopAt);
         tineOsc.stop(stopAt);
+
+        return { voiceGain, peakAmp: amp, oscillators: [osc1, osc2, tineOsc] };
     }
 
     // 5. Classical Pianoforte / Harpsichord Plucked Synthesis
-    playHarpsichordNote(midi, durationSec, velocity) {
-        const now = this.ctx.currentTime;
+    playHarpsichordNote(midi, durationSec, velocity, startTime = null) {
+        const now = this.resolveStartTime(startTime);
         const freq = 440 * Math.pow(2, (midi - 69) / 12);
         const amp = Math.min(1, Math.max(0.12, velocity)) * 0.20;
         const releaseTime = Math.max(0.55, Math.min(1.6, durationSec * 1.1));
@@ -380,22 +499,22 @@ class PianoAudioEngine {
         osc2.connect(osc2Gain);
         osc2Gain.connect(filter);
         filter.connect(voiceGain);
-        voiceGain.connect(this.masterGain);
+        this.connectVoiceToMaster(voiceGain, midi, now);
 
         const stopAt = now + releaseTime + 0.05;
         osc1.start(now);
         osc2.start(now);
         osc1.stop(stopAt);
         osc2.stop(stopAt);
+
+        return { voiceGain, peakAmp: amp, oscillators: [osc1, osc2] };
     }
 
-    // Wooden soft metronome click
-    playMetronomeClick(isDownbeat = false) {
+    // Wooden soft metronome click (supports exact lookahead timestamp)
+    playMetronomeClick(isDownbeat = false, startTime = null) {
         this.init();
-        if (typeof performance !== 'undefined' && performance.now) {
-            this.lastSynthPlayTimestamp = performance.now();
-        }
-        const now = this.ctx.currentTime;
+        const now = this.resolveStartTime(startTime);
+        this.markSynthPlaybackTimestamp(now);
         const osc = this.ctx.createOscillator();
         const g = this.ctx.createGain();
         osc.type = 'triangle';

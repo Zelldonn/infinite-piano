@@ -971,6 +971,9 @@ function rebuildScoreStream() {
     for (let i = 0; i < 16; i++) {
         AppState.measures.push(generateNextMeasure());
     }
+    if (typeof resyncAudioScheduler === 'function') {
+        resyncAudioScheduler();
+    }
     updateHeaderSummary();
     updateHudInfo();
     renderScore();
@@ -1021,6 +1024,9 @@ function refreshUpcomingMeasuresLive(applyCurrentIfPausedAtStart = true) {
     AppState.phraseState.periodIdx = -1;
     AppState.phraseState.motifEvents = [];
     ensureInfiniteBuffer();
+    if (typeof resyncAudioScheduler === 'function') {
+        resyncAudioScheduler();
+    }
     updateHeaderSummary();
     updateHudInfo();
     renderScore();

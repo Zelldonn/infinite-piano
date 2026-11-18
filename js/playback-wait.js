@@ -20,43 +20,231 @@ function getEffectiveTiedDurationBeats(events, evIdx, measure, isTreble) {
     return totalBeats;
 }
 
-// Trigger all notes scheduled at a specific sub-beat (0.5 beat resolution)
-function triggerMeasureBeatAudio(measure, subBeat, playSound = true) {
+// 8-bar period expressive dynamic contour (gentle opening -> bar 6 climax -> warm bar 8 cadence)
+const PHRASE_DYNAMIC_CURVE = [0.88, 0.93, 0.97, 0.91, 1.00, 1.08, 0.96, 0.84];
+
+// Compute LH & RH gain multipliers from AppState.handBalance (-1 = LH solo, 0 = balanced, +1 = RH solo)
+function getHandBalanceGains() {
+    const bal = Math.max(-1, Math.min(1, Number(AppState.handBalance) || 0));
+    const lhScale = bal > 0 ? Math.max(0, 1 - bal) : 1;
+    const rhScale = bal < 0 ? Math.max(0, 1 + bal) : 1;
+    return { lhScale, rhScale };
+}
+
+// Compute expressive velocity for a given bar, beat position, and hand
+function computeExpressiveVelocity(baseVel, measure, subBeat, handScale) {
+    const barIdx = typeof measure.barInPeriod === 'number' ? (measure.barInPeriod % 8) : 0;
+    const phraseMult = PHRASE_DYNAMIC_CURVE[barIdx] || 1.0;
+    const isDownbeat = Math.abs(subBeat) < 0.01;
+    const isOffbeatEighth = Math.abs(subBeat - Math.round(subBeat)) > 0.1;
+    const metricOffset = isDownbeat ? 0.04 : (isOffbeatEighth ? -0.04 : 0);
+    const humanize = (Math.random() - 0.5) * 0.03;
+    return Math.max(0.10, Math.min(1.0, (baseVel * phraseMult + metricOffset + humanize) * handScale));
+}
+
+// Trigger all notes scheduled at a specific sub-beat (0.5 beat resolution) with exact AudioContext startTime
+function triggerMeasureBeatAudio(measure, subBeat, playSound = true, startTime = null) {
     const beatDurationSec = 60 / AppState.tempo;
+    const { lhScale, rhScale } = getHandBalanceGains();
 
     // Optional soft wooden metronome (compound duple 0 & 1.5 in 6/8; integer beats in 3/4, 4/4, 5/4)
     const isMetronomePulse = measure.timeSig === '6/8'
         ? (Math.abs(subBeat) < 0.01 || Math.abs(subBeat - 1.5) < 0.01)
         : (Math.abs(subBeat - Math.round(subBeat)) < 0.01);
     if (playSound && AppState.metronomeEnabled && isMetronomePulse) {
-        audioEngine.playMetronomeClick(subBeat < 0.01);
+        audioEngine.playMetronomeClick(subBeat < 0.01, startTime);
     }
 
-    // Trigger Left Hand events starting at this subBeat (skipping tied continuations)
-    for (let idx = 0; idx < measure.lhEvents.length; idx++) {
-        const ev = measure.lhEvents[idx];
-        if (!ev.isRest && !ev.isTiedFromPrev && Math.abs(ev.startBeat - subBeat) < 0.05) {
-            const durSec = getEffectiveTiedDurationBeats(measure.lhEvents, idx, measure, false) * beatDurationSec;
-            for (const midi of ev.notes) {
-                if (playSound) audioEngine.playNote(midi, durSec, 0.58);
-            }
-        }
-    }
-
-    // Trigger Right Hand events starting at this subBeat (skipping tied continuations & impro measures)
-    // In a Guided Improvisation measure, mute the procedural Right Hand so the user can improvise freely over the Left Hand!
-    if (!measure.isImprovisation) {
-        const rhVel = measure.isEarTraining ? 0.84 : 0.74; // Slightly emphasize melody in Ear Training measures
-        for (let idx = 0; idx < measure.rhEvents.length; idx++) {
-            const ev = measure.rhEvents[idx];
+    // Trigger Left Hand events starting at this subBeat (skipping tied continuations & muted hand)
+    if (lhScale > 0.01) {
+        for (let idx = 0; idx < measure.lhEvents.length; idx++) {
+            const ev = measure.lhEvents[idx];
             if (!ev.isRest && !ev.isTiedFromPrev && Math.abs(ev.startBeat - subBeat) < 0.05) {
-                const durSec = getEffectiveTiedDurationBeats(measure.rhEvents, idx, measure, true) * beatDurationSec;
+                const durSec = getEffectiveTiedDurationBeats(measure.lhEvents, idx, measure, false) * beatDurationSec;
+                const lhVel = computeExpressiveVelocity(0.58, measure, subBeat, lhScale);
                 for (const midi of ev.notes) {
-                    if (playSound) audioEngine.playNote(midi, durSec, rhVel);
+                    if (playSound) audioEngine.playNote(midi, durSec, lhVel, startTime);
                 }
             }
         }
     }
+
+    // Trigger Right Hand events starting at this subBeat (skipping tied continuations, impro measures & muted hand)
+    // In a Guided Improvisation measure, mute the procedural Right Hand so the user can improvise freely over the Left Hand!
+    if (!measure.isImprovisation && rhScale > 0.01) {
+        const rhBase = measure.isEarTraining ? 0.84 : 0.74; // Slightly emphasize melody in Ear Training measures
+        for (let idx = 0; idx < measure.rhEvents.length; idx++) {
+            const ev = measure.rhEvents[idx];
+            if (!ev.isRest && !ev.isTiedFromPrev && Math.abs(ev.startBeat - subBeat) < 0.05) {
+                const durSec = getEffectiveTiedDurationBeats(measure.rhEvents, idx, measure, true) * beatDurationSec;
+                const rhVel = computeExpressiveVelocity(rhBase, measure, subBeat, rhScale);
+                for (const midi of ev.notes) {
+                    if (playSound) audioEngine.playNote(midi, durSec, rhVel, startTime);
+                }
+            }
+        }
+    }
+}
+
+// =======================================================================
+// Sample-Accurate Web Audio Lookahead Scheduler (Chris Wilson Pattern)
+// Decouples audio scheduling from requestAnimationFrame jitter and locks
+// visual playhead interpolation directly to AudioContext.currentTime.
+// =======================================================================
+const AudioLookaheadScheduler = {
+    lookaheadSec: 0.12,
+    intervalMs: 25,
+    timerId: null,
+    nextMeasureIndex: 0,
+    nextSubBeat: 0,
+    nextNoteTime: 0,
+    anchors: [] // [{ measureIndex, subBeat, audioTime, beatsPerMeasure, tempo }]
+};
+
+function stopAudioScheduler() {
+    if (AudioLookaheadScheduler.timerId !== null) {
+        if (typeof clearInterval === 'function') {
+            clearInterval(AudioLookaheadScheduler.timerId);
+        }
+        AudioLookaheadScheduler.timerId = null;
+    }
+    AudioLookaheadScheduler.anchors = [];
+}
+
+function startAudioScheduler() {
+    audioEngine.init();
+    stopAudioScheduler();
+    if (!audioEngine.ctx) return;
+
+    const meas = getMeasureByIndex(AppState.currentMeasureIndex);
+    if (!meas) return;
+
+    const now = audioEngine.ctx.currentTime;
+    const floorSub = Math.floor(AppState.currentBeatFloat * 2) / 2;
+    const fracIntoSub = AppState.currentBeatFloat - floorSub;
+
+    if (fracIntoSub > 0.02) {
+        // Resuming mid-sub-beat: anchor current visual position at `now` and schedule next 0.5-beat boundary cleanly
+        let nextSub = floorSub + 0.5;
+        let nextM = AppState.currentMeasureIndex;
+        const waitBeats = nextSub - AppState.currentBeatFloat;
+        if (nextSub >= meas.beatsPerMeasure - 0.01) {
+            nextSub = 0;
+            nextM++;
+        }
+        AudioLookaheadScheduler.anchors.push({
+            measureIndex: AppState.currentMeasureIndex,
+            subBeat: AppState.currentBeatFloat,
+            audioTime: now,
+            beatsPerMeasure: meas.beatsPerMeasure,
+            tempo: AppState.tempo
+        });
+        AudioLookaheadScheduler.nextMeasureIndex = nextM;
+        AudioLookaheadScheduler.nextSubBeat = nextSub;
+        AudioLookaheadScheduler.nextNoteTime = now + waitBeats * (60 / AppState.tempo);
+    } else {
+        // Starting cleanly on a sub-beat boundary (with 25ms micro-lead for glitch-free first chord attack)
+        const startSub = Math.round(AppState.currentBeatFloat * 2) / 2;
+        const firstTime = now + 0.025;
+        AudioLookaheadScheduler.nextMeasureIndex = AppState.currentMeasureIndex;
+        AudioLookaheadScheduler.nextSubBeat = startSub >= meas.beatsPerMeasure - 0.01 ? 0 : startSub;
+        AudioLookaheadScheduler.nextNoteTime = firstTime;
+    }
+
+    pumpAudioScheduler();
+    if (typeof setInterval === 'function') {
+        AudioLookaheadScheduler.timerId = setInterval(pumpAudioScheduler, AudioLookaheadScheduler.intervalMs);
+    }
+}
+
+function resyncAudioScheduler() {
+    if (AppState.isPlaying && AppState.scrollMode !== 'midi_wait' && AppState.scrollMode !== 'mic_wait') {
+        startAudioScheduler();
+    } else {
+        stopAudioScheduler();
+    }
+}
+
+function pumpAudioScheduler() {
+    if (!AppState.isPlaying || AppState.scrollMode === 'midi_wait' || AppState.scrollMode === 'mic_wait') return;
+    if (!audioEngine.ctx) return;
+
+    const now = audioEngine.ctx.currentTime;
+    // Recover gracefully if browser tab was backgrounded (never blast catch-up bursts)
+    if (now - AudioLookaheadScheduler.nextNoteTime > 0.5) {
+        AudioLookaheadScheduler.nextNoteTime = now + 0.025;
+    }
+
+    while (AudioLookaheadScheduler.nextNoteTime < now + AudioLookaheadScheduler.lookaheadSec) {
+        // Keep lookahead buffer populated ahead of audio scheduling cursor
+        while (AppState.measureWindowOffset + AppState.measures.length <= AudioLookaheadScheduler.nextMeasureIndex + 6) {
+            AppState.measures.push(generateNextMeasure());
+        }
+
+        const meas = getMeasureByIndex(AudioLookaheadScheduler.nextMeasureIndex);
+        if (!meas) break;
+
+        const subBeat = AudioLookaheadScheduler.nextSubBeat;
+        const noteTime = AudioLookaheadScheduler.nextNoteTime;
+
+        AudioLookaheadScheduler.anchors.push({
+            measureIndex: meas.index,
+            subBeat,
+            audioTime: noteTime,
+            beatsPerMeasure: meas.beatsPerMeasure,
+            tempo: AppState.tempo
+        });
+
+        triggerMeasureBeatAudio(meas, subBeat, true, noteTime);
+
+        const halfBeatSec = 0.5 * (60 / AppState.tempo);
+        AudioLookaheadScheduler.nextNoteTime += halfBeatSec;
+        AudioLookaheadScheduler.nextSubBeat += 0.5;
+        if (AudioLookaheadScheduler.nextSubBeat >= meas.beatsPerMeasure - 0.01) {
+            AudioLookaheadScheduler.nextSubBeat = 0;
+            AudioLookaheadScheduler.nextMeasureIndex++;
+        }
+    }
+
+    // Trim stale past anchors while keeping recent history for smooth visual sync
+    const anchors = AudioLookaheadScheduler.anchors;
+    while (anchors.length > 32 && anchors[1].audioTime < now - 0.5) {
+        anchors.shift();
+    }
+}
+
+// Synchronize visual playhead smoothly with the AudioContext clock
+function syncVisualPlayheadFromAudioClock() {
+    if (!audioEngine.ctx) return;
+    pumpAudioScheduler();
+
+    const anchors = AudioLookaheadScheduler.anchors;
+    if (anchors.length === 0) return;
+
+    const now = audioEngine.ctx.currentTime;
+    let activeAnchor = anchors[0];
+    for (let i = anchors.length - 1; i >= 0; i--) {
+        if (anchors[i].audioTime <= now) {
+            activeAnchor = anchors[i];
+            break;
+        }
+    }
+
+    const elapsedSec = Math.max(0, now - activeAnchor.audioTime);
+    const rawBeat = activeAnchor.subBeat + elapsedSec * (activeAnchor.tempo / 60);
+    const clampedBeat = Math.max(0, Math.min(activeAnchor.beatsPerMeasure - 0.0001, rawBeat));
+
+    const prevMeasureIdx = AppState.currentMeasureIndex;
+    AppState.currentMeasureIndex = activeAnchor.measureIndex;
+    AppState.currentBeatFloat = clampedBeat;
+
+    if (AppState.currentMeasureIndex !== prevMeasureIdx) {
+        ensureInfiniteBuffer();
+        updateHudInfo();
+        autoScrollPageModeIfNeeded();
+    }
+
+    renderScore();
 }
 
 // Gather expected pitch classes at current sub-beat for "Attente MIDI/Micro" mode
@@ -120,14 +308,15 @@ function advanceOneSubBeatStep(playAudio = true) {
         }
     }
 
+    if (AppState.isPlaying) {
+        resyncAudioScheduler();
+    }
     updateHudInfo();
     renderScore();
 }
 
-// Main animation loop for smooth scrolling, audio scheduling, and real-time Mic Pitch Detection
+// Main animation loop for AudioContext-synced visual scrolling and real-time Mic Pitch Detection
 function animationLoop(timestamp) {
-    if (!AppState.lastFrameTime) AppState.lastFrameTime = timestamp;
-    const dtSec = Math.min(0.1, (timestamp - AppState.lastFrameTime) / 1000);
     AppState.lastFrameTime = timestamp;
 
     // Poll Microphone Pitch Detector when in 'mic_wait' mode
@@ -136,42 +325,10 @@ function animationLoop(timestamp) {
     }
 
     if (AppState.isPlaying && AppState.scrollMode !== 'midi_wait' && AppState.scrollMode !== 'mic_wait') {
-        const measure = getMeasureByIndex(AppState.currentMeasureIndex);
-        if (measure) {
-            const beatsPerSec = AppState.tempo / 60;
-            AppState.currentBeatFloat += dtSec * beatsPerSec;
-
-            // Check if we crossed a 0.5-beat boundary
-            const currentSubIdx = Math.floor(AppState.currentBeatFloat * 2);
-            const globalSubId = AppState.currentMeasureIndex * 16 + currentSubIdx;
-
-            if (globalSubId !== AppState.lastTriggeredSubBeat) {
-                AppState.lastTriggeredSubBeat = globalSubId;
-                const subBeat = currentSubIdx * 0.5;
-                if (subBeat < measure.beatsPerMeasure) {
-                    triggerMeasureBeatAudio(measure, subBeat, true);
-                }
-            }
-
-            // Advance to next measure when measure completes
-            if (AppState.currentBeatFloat >= measure.beatsPerMeasure) {
-                AppState.currentBeatFloat -= measure.beatsPerMeasure;
-                AppState.currentMeasureIndex++;
-                ensureInfiniteBuffer();
-                updateHudInfo();
-                autoScrollPageModeIfNeeded();
-
-                // Trigger beat 0 of the newly entered measure immediately
-                const newMeas = getMeasureByIndex(AppState.currentMeasureIndex);
-                if (newMeas) {
-                    const newGlobalSubId = AppState.currentMeasureIndex * 16;
-                    AppState.lastTriggeredSubBeat = newGlobalSubId;
-                    triggerMeasureBeatAudio(newMeas, 0, true);
-                }
-            }
-
-            renderScore();
+        if (AudioLookaheadScheduler.anchors.length === 0) {
+            startAudioScheduler();
         }
+        syncVisualPlayheadFromAudioClock();
     }
 
     requestAnimationFrame(animationLoop);
@@ -248,12 +405,13 @@ function checkWaitModeNoteMatch(midi) {
 
 function handleUserNoteOn(midi, velocity = 0.75) {
     AppState.activeMidiNotes.add(midi);
-    audioEngine.playNote(midi, 1.4, velocity);
+    audioEngine.noteOn(midi, velocity);
     checkWaitModeNoteMatch(midi);
 }
 
 function handleUserNoteOff(midi) {
     AppState.activeMidiNotes.delete(midi);
+    audioEngine.noteOff(midi);
 }
 
 // Real-Time Microphone Pitch & Spectral Chroma Detector for Acoustic/Digital Pianos
@@ -570,6 +728,9 @@ function initWebMIDI() {
                         handleUserNoteOn(data1, data2 / 127);
                     } else if (cmd === 0x80 || (cmd === 0x90 && data2 === 0)) {
                         handleUserNoteOff(data1);
+                    } else if (cmd === 0xB0 && data1 === 64) {
+                        // MIDI CC 64: Sustain / Damper Pedal (>= 64 pressed, < 64 released)
+                        audioEngine.setSustainPedal(data2 >= 64);
                     }
                 };
             }

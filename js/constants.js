@@ -135,6 +135,8 @@ const AppState = {
     sheetTheme: 'parchment',  // 'parchment' | 'dark'
     metronomeEnabled: false,
     reverbAmount: 0.35,
+    masterVolume: 0.88,       // 0.0 .. 1.0 master output level
+    handBalance: 0,           // -1.0 (LH solo) .. 0 (balanced) .. +1.0 (RH solo)
 
     // Musical parameters
     activePreset: 'gymnopedie',
