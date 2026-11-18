@@ -10,6 +10,7 @@ class PianoAudioEngine {
         this.convolver = null;
         this.noiseBuffer = null;
         this.isInitialized = false;
+        this.lastSynthPlayTimestamp = 0;
     }
 
     // Initialize AudioContext on first user interaction
@@ -99,6 +100,9 @@ class PianoAudioEngine {
     // Dispatch note synthesis according to selected Sound Type
     playNote(midi, durationSec = 1.5, velocity = 0.68) {
         this.init();
+        if (typeof performance !== 'undefined' && performance.now) {
+            this.lastSynthPlayTimestamp = performance.now();
+        }
         const type = AppState.soundType || 'classical';
         if (type === 'classical') {
             this.playClassicalGrandNote(midi, durationSec, velocity, false);
@@ -388,6 +392,9 @@ class PianoAudioEngine {
     // Wooden soft metronome click
     playMetronomeClick(isDownbeat = false) {
         this.init();
+        if (typeof performance !== 'undefined' && performance.now) {
+            this.lastSynthPlayTimestamp = performance.now();
+        }
         const now = this.ctx.currentTime;
         const osc = this.ctx.createOscillator();
         const g = this.ctx.createGain();

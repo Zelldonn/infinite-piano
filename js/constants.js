@@ -160,6 +160,7 @@ const AppState = {
 
     // Infinite Score Buffer & Playhead
     measures: [],
+    measureWindowOffset: 0,  // Global measure index of measures[0] for rolling window pruning
     currentMeasureIndex: 0,
     currentBeatFloat: 0,     // Floating beat position within currentMeasureIndex
     lastFrameTime: 0,

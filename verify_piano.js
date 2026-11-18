@@ -134,7 +134,7 @@ const makeEl = (tag = 'div') => ({
         return {
             setTransform() {}, save() {}, restore() {}, clearRect() {}, fillRect() {},
             beginPath() {}, moveTo() {}, lineTo() {}, closePath() {}, stroke() {}, fill() {},
-            arc() {}, bezierCurveTo() {}, quadraticCurveTo() {}, roundRect() {}, rect() {}, clip() {},
+            arc() {}, ellipse() {}, bezierCurveTo() {}, quadraticCurveTo() {}, roundRect() {}, rect() {}, clip() {},
             fillText() {}, strokeText() {}, measureText(s) { return { width: String(s).length * 7 }; },
             setLineDash() {}
         };
@@ -153,10 +153,11 @@ getEl('scoreViewportContainer').clientWidth = 960;
 getEl('scoreViewportContainer').clientHeight = 420;
 
 let swRegistrations = [];
+let mockNowMs = 1000;
 const context = {
     console,
     Math, Number, String, Boolean, Array, Object, Map, Set, JSON, Float32Array, Uint8Array,
-    performance: { now: () => 0 },
+    performance: { now: () => mockNowMs },
     requestAnimationFrame: () => 0,
     localStorage: { getItem: () => null, setItem() {} },
     navigator: {
@@ -434,10 +435,176 @@ assert(upperDiffExt <= 7);
 context.initPWAInstallPrompt();
 context.bindEventListeners();
 
-appState.currentMeasureIndex = 6;
-appState.viewLayout = 'ribbon';
-context.renderScore();
+// Test H: Regression tests for all major bug fixes
+// H1. Triads mode strictly excludes 7ths in LH voicing and Improvisation guide tones
+appState.harmonicRichness = 'triads';
+const cTriad = context.buildContemplativeChord('C', 'major', 0, 'triads', 'gymnopedie');
+assert.strictEqual(cTriad.hasSeventh, false);
+assert.strictEqual(cTriad.seventhPc, null);
+const cTriadVoicing = context.buildSmoothLeftHandVoicing(cTriad, [48, 55, 59, 64]);
+for (const m of [cTriadVoicing.bassMidi, ...cTriadVoicing.upperMidis]) {
+    assert([0, 4, 7].includes(context.midiToPc(m)), `Triad voicing must only use C/E/G, got midi ${m}`);
+}
+assert(cTriadVoicing.upperMidis[2] - cTriadVoicing.upperMidis[0] <= 12, 'LH block chord span must be <= 12 semis');
+appState.rootKey = 'C';
+appState.generationRootKey = 'C';
+appState.mode = 'major';
+appState.improMeasureEnabled = true;
+context.rebuildScoreStream();
+for (const m of appState.measures[0].improGuideMidis) {
+    assert(appState.measures[0].chord.chordPcs.includes(context.midiToPc(m)), 'Triad improGuideMidis must only contain triad tones');
+}
+appState.improMeasureEnabled = false;
+
+// H2. Borrowed minor iv6 in Major actually uses major 6th (+9) matching Fm6 label, never minor 7th (+10)
+let foundBorrowedIv6 = false;
+for (let attempt = 0; attempt < 80; attempt++) {
+    const ch = context.buildContemplativeChord('C', 'major', 3, 'borrowed', 'licorice');
+    if (ch.symbol === 'Fm6') {
+        assert(ch.chordPcs.includes(2), 'Fm6 must contain D (pc 2, major 6th)');
+        assert(!ch.chordPcs.includes(3), 'Fm6 must not contain Eb (pc 3, minor 7th)');
+        foundBorrowedIv6 = true;
+        break;
+    }
+}
+assert(foundBorrowedIv6, 'Expected to sample borrowed Fm6 chord in C major');
+
+// H3. Diminished chord uses true diatonic fifth (+6) instead of hardcoded perfect fifth (+7)
+appState.rootKey = 'D';
+appState.generationRootKey = 'D';
+appState.mode = 'aeolian';
+appState.harmonicRichness = 'triads';
+appState.leftHandPattern = 'nordic_fifths';
+appState.timeSig = '4/4';
+appState.phraseState.periodIdx = 0;
+appState.phraseState.chordDegrees = [1, 1, 1, 1, 1, 1, 1, 1]; // ii° = E dim in D Aeolian (E, G, Bb)
+const dAeolianScale = context.getScalePitchClasses('D', 'aeolian');
+appState.measures = [];
+appState.measureWindowOffset = 0;
+appState.generatedMeasureCounter = 1; // measureIndex = 1 uses degree 1 (Edim)
+const dimMeas = context.generateNextMeasure();
+assert.strictEqual(dimMeas.chord.degree, 1);
+for (const ev of dimMeas.lhEvents) {
+    for (const m of ev.notes) {
+        assert(dAeolianScale.includes(context.midiToPc(m)), `Diminished chord LH note midi ${m} must remain diatonic in D Aeolian`);
+    }
+}
+
+// H4. Ergonomic LH block span <= 12 semitones across all richness & presets
+for (const rich of ['triads', 'sevenths', 'extensions', 'borrowed']) {
+    appState.harmonicRichness = rich;
+    let prev = [48, 55, 59, 64];
+    for (let deg = 0; deg < 7; deg++) {
+        const ch = context.buildContemplativeChord('D', 'dorian', deg, rich, 'gymnopedie');
+        const v = context.buildSmoothLeftHandVoicing(ch, prev);
+        assert(v.upperMidis[2] - v.upperMidis[0] <= 12, `Span > 12 for richness=${rich} deg=${deg}`);
+        prev = [v.bassMidi, ...v.upperMidis];
+    }
+}
+
+// H5. 5/4 sustained_voicing splits cleanly into tied 3 + 2 and skips audio re-attack at beat 3
+appState.timeSig = '5/4';
+appState.leftHandPattern = 'sustained_voicing';
+appState.rootKey = 'C';
+appState.generationRootKey = 'C';
+appState.mode = 'major';
+context.rebuildScoreStream();
+const meas54 = appState.measures[0];
+assert.strictEqual(meas54.lhEvents.length, 2, '5/4 sustained_voicing must split into 2 tied events');
+assert.strictEqual(meas54.lhEvents[0].durationBeats, 3);
+assert.strictEqual(meas54.lhEvents[0].tieToNext, true);
+assert.strictEqual(meas54.lhEvents[1].startBeat, 3);
+assert.strictEqual(meas54.lhEvents[1].durationBeats, 2);
+assert.strictEqual(meas54.lhEvents[1].isTiedFromPrev, true);
+
+// H6. 6/8 metronome clicks ONLY on compound duple pulses (0 and 1.5), not on 1.0 or 2.0
+appState.timeSig = '6/8';
+appState.metronomeEnabled = true;
+context.rebuildScoreStream();
+const engine = runInVm('audioEngine');
+const origClick = engine.playMetronomeClick.bind(engine);
+const metroCalls = [];
+engine.playMetronomeClick = (isDownbeat) => { metroCalls.push(isDownbeat); origClick(isDownbeat); };
+const m68 = appState.measures[0];
+for (const sb of [0, 0.5, 1.0, 1.5, 2.0, 2.5]) {
+    context.triggerMeasureBeatAudio(m68, sb, true);
+}
+engine.playMetronomeClick = origClick;
+appState.metronomeEnabled = false;
+assert.deepStrictEqual(metroCalls, [true, false], '6/8 metronome must click strictly on beats 0 (strong) and 1.5 (weak)');
+
+// H7. midi_wait enforces BOTH hands on simultaneous beats (pressing only RH does not advance)
+appState.timeSig = '4/4';
+appState.leftHandPattern = 'satie';
+appState.scrollMode = 'midi_wait';
+context.rebuildScoreStream();
+const mWait = appState.measures[0];
+// Ensure distinct RH and LH pitches on beat 0
+mWait.lhEvents = [{ startBeat: 0, durationBeats: 4, notes: [48], isRest: false }]; // C3
+mWait.rhEvents = [{ startBeat: 0, durationBeats: 4, notes: [64], isRest: false }]; // E4
+appState.currentMeasureIndex = 0;
+appState.currentBeatFloat = 0;
+appState.satisfiedSubBeatNotes.clear();
+assert.strictEqual(context.checkWaitModeNoteMatch(64), false, 'midi_wait must wait for LH C3 even after RH E4 is pressed');
+assert.strictEqual(appState.currentMeasureIndex, 0);
+assert.strictEqual(context.checkWaitModeNoteMatch(48), true, 'midi_wait must advance once both RH and LH notes are satisfied');
+assert.strictEqual(appState.currentMeasureIndex, 1);
+
+// H8. Mic self-triggering guard ignores audio immediately after synth playback
+appState.scrollMode = 'mic_wait';
+appState.currentMeasureIndex = 0;
+appState.currentBeatFloat = 0;
+appState.satisfiedSubBeatNotes.clear();
+detector.isListening = true;
+detector.analyser.getFloatTimeDomainData = (buf) => { buf.set(detector.timeBuf); };
+mockNowMs = 5000;
+engine.playNote(60, 0.5, 0.5); // sets lastSynthPlayTimestamp = 5000
+mockNowMs = 5100; // within 420ms cooldown
+detector.stableFrames = 1;
+detector.stableCandidateMidi = 72;
+detector.processFrame(5100);
+assert.strictEqual(detector.stableFrames, 0, 'MicPitchDetector must ignore audio during synth-playback cooldown');
+detector.isListening = false;
+
+// H9. Rolling window pruning caps memory & preserves measure lookups + live voice-leading continuity
+appState.scrollMode = 'continuous';
+appState.timeSig = '4/4';
+appState.leftHandPattern = 'satie';
+context.rebuildScoreStream();
+for (let m = 0; m <= 60; m++) {
+    appState.currentMeasureIndex = m;
+    context.ensureInfiniteBuffer();
+}
+assert.strictEqual(appState.measureWindowOffset, 24, 'Expected rolling window to prune 24 old measures after reaching measure 60');
+assert(appState.measures.length < 55, `Expected bounded rolling measure buffer, got ${appState.measures.length}`);
+assert.strictEqual(context.getMeasureByIndex(60).index, 60);
+const keptBeforeRefresh = context.getMeasureByIndex(59);
+appState.currentBeatFloat = 0;
+appState.isPlaying = false;
+context.refreshUpcomingMeasuresLive(true);
+assert.deepStrictEqual([...appState.lastVoicingMidis.slice(0, 1)].length, 1);
+assert(keptBeforeRefresh && context.getMeasureByIndex(59).index === 59);
+
+// H10. Smoke-test Page-View viewport culling, multi-voice ties, fallback 8th rest moveTo, and preset highlight clearing
+getEl('scoreViewportContainer').scrollTop = 480;
+appState.rightHandDensity = 4;
 appState.viewLayout = 'page';
 context.renderScore();
+context.document.fonts.check = () => false; // Exercise vector fallback paths (including 8th rest)
+const restOps = [];
+const spyCtx = {
+    save() {}, restore() {}, fillRect() {}, fill() {}, stroke() {}, arc() {},
+    beginPath() { restOps.push('beginPath'); },
+    moveTo() { restOps.push('moveTo'); },
+    lineTo() { restOps.push('lineTo'); },
+    quadraticCurveTo() { restOps.push('quadraticCurveTo'); }
+};
+context.drawRestGlyph(spyCtx, 100, 50, 10, 0.5, { ink: '#000' });
+const qIdx = restOps.indexOf('quadraticCurveTo');
+assert(qIdx > 0 && restOps[qIdx - 1] === 'moveTo', 'Fallback 8th rest must call moveTo immediately before quadraticCurveTo');
+appState.viewLayout = 'ribbon';
+context.renderScore();
+context.document.fonts.check = () => true;
+context.updatePresetCardHighlights(null);
 
-console.log('✓ All PWA, CSS, DOM, module separation, unit & integration checks passed!');
+console.log('✓ All PWA, CSS, DOM, module separation, bug-fix regression, unit & integration checks passed!');

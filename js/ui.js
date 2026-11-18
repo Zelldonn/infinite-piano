@@ -18,7 +18,7 @@ function updateHeaderSummary() {
 
 // Keep UI key selector & header badge synchronized with the measure currently under the playhead
 function syncPlayheadKeyToUI() {
-    const measure = AppState.measures[AppState.currentMeasureIndex];
+    const measure = getMeasureByIndex(AppState.currentMeasureIndex);
     if (!measure) return;
     if (AppState.rootKey !== measure.rootKey) {
         AppState.rootKey = measure.rootKey;
@@ -31,7 +31,7 @@ function syncPlayheadKeyToUI() {
 }
 
 function updateHudInfo() {
-    const measure = AppState.measures[AppState.currentMeasureIndex];
+    const measure = getMeasureByIndex(AppState.currentMeasureIndex);
     if (!measure) return;
     syncPlayheadKeyToUI();
     document.getElementById('hudMeasureNum').textContent = `${measure.index + 1}`;
@@ -156,7 +156,7 @@ function setSoundType(newSoundType, playPreview = true) {
 
     if (playPreview) {
         audioEngine.init();
-        const meas = AppState.measures[AppState.currentMeasureIndex];
+        const meas = getMeasureByIndex(AppState.currentMeasureIndex);
         if (meas) {
             triggerMeasureBeatAudio(meas, 0, true);
         } else {
@@ -217,6 +217,16 @@ async function setScrollMode(modeValue) {
     renderScore();
 }
 
+// Highlight active preset button card (pass null to clear all highlights for custom scenarios)
+function updatePresetCardHighlights(activeKey) {
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+        const isSelected = Boolean(activeKey) && btn.getAttribute('data-preset') === activeKey;
+        btn.className = isSelected
+            ? 'preset-btn text-left p-2 rounded-xl border border-amber-500/60 bg-amber-500/10 hover:bg-amber-500/15 transition group'
+            : 'preset-btn text-left p-2 rounded-xl border border-studio-700 bg-studio-850 hover:bg-studio-800 transition group';
+    });
+}
+
 // Apply one of the 4 signature contemplative presets
 function applyStylePreset(presetKey) {
     const p = STYLE_PRESETS[presetKey];
@@ -245,14 +255,7 @@ function applyStylePreset(presetKey) {
     document.getElementById('selectIntervalLeap').value = p.intervalLeap;
     setReverbAmount(p.reverb);
 
-    // Highlight active preset button card
-    document.querySelectorAll('.preset-btn').forEach(btn => {
-        const isSelected = btn.getAttribute('data-preset') === presetKey;
-        btn.className = isSelected
-            ? 'preset-btn text-left p-2 rounded-xl border border-amber-500/60 bg-amber-500/10 hover:bg-amber-500/15 transition group'
-            : 'preset-btn text-left p-2 rounded-xl border border-studio-700 bg-studio-850 hover:bg-studio-800 transition group';
-    });
-
+    updatePresetCardHighlights(presetKey);
     rebuildScoreStream();
 }
 
@@ -334,6 +337,7 @@ function renderSavedScenariosList() {
             document.getElementById('selectLeftHandPattern').value = latest.leftHandPattern;
             document.getElementById('selectRightHandDensity').value = String(latest.rightHandDensity);
             document.getElementById('selectIntervalLeap').value = latest.intervalLeap;
+            updatePresetCardHighlights(null);
 
             rebuildScoreStream();
         });
@@ -580,7 +584,7 @@ function bindEventListeners() {
 
     // Clicking the floating pedagogy badge reveals the current Ear Training measure if unrevealed
     document.getElementById('pedagogyActiveBanner').addEventListener('click', () => {
-        const meas = AppState.measures[AppState.currentMeasureIndex];
+        const meas = getMeasureByIndex(AppState.currentMeasureIndex);
         if (meas && meas.isEarTraining && !meas.earRevealed) {
             meas.earRevealed = true;
             updateHudInfo();
@@ -627,7 +631,7 @@ function bindEventListeners() {
         isDraggingScore = true;
         hasDraggedSignificantly = false;
         dragStartX = e.clientX;
-        const meas = AppState.measures[AppState.currentMeasureIndex];
+        const meas = getMeasureByIndex(AppState.currentMeasureIndex);
         const bpm = meas ? meas.beatsPerMeasure : 3;
         dragStartBeatGlobal = AppState.currentMeasureIndex * bpm + AppState.currentBeatFloat;
     });
@@ -637,11 +641,12 @@ function bindEventListeners() {
         const dx = e.clientX - dragStartX;
         if (Math.abs(dx) > 8) {
             hasDraggedSignificantly = true;
-            const meas = AppState.measures[AppState.currentMeasureIndex] || AppState.measures[0];
+            const meas = getMeasureByIndex(AppState.currentMeasureIndex) || AppState.measures[0];
             if (!meas) return;
             const bpm = meas.beatsPerMeasure;
             const beatDelta = -(dx / 210) * bpm;
-            const targetGlobalBeat = Math.max(0, dragStartBeatGlobal + beatDelta);
+            const minGlobalBeat = AppState.measureWindowOffset * bpm;
+            const targetGlobalBeat = Math.max(minGlobalBeat, dragStartBeatGlobal + beatDelta);
 
             AppState.currentMeasureIndex = Math.floor(targetGlobalBeat / bpm);
             AppState.currentBeatFloat = targetGlobalBeat % bpm;
@@ -673,18 +678,33 @@ function bindEventListeners() {
                 AppState.currentMeasureIndex = box.measureIndex;
                 AppState.currentBeatFloat = box.beat;
                 ensureInfiniteBuffer();
-                const meas = AppState.measures[AppState.currentMeasureIndex];
+                const meas = getMeasureByIndex(AppState.currentMeasureIndex);
                 // If tapping an unrevealed Ear Training measure, reveal its hidden notes on second tap or if tapping upper staff
                 if (meas && meas.isEarTraining && !meas.earRevealed && box.beat > 0) {
                     meas.earRevealed = true;
                 }
-                triggerMeasureBeatAudio(meas, box.beat, true);
+                if (meas) {
+                    triggerMeasureBeatAudio(meas, box.beat, true);
+                }
                 updateHudInfo();
                 renderScore();
                 break;
             }
         }
     });
+
+    // Re-render visible Page-View systems seamlessly when scrolling vertically
+    const viewportContainer = document.getElementById('scoreViewportContainer');
+    if (viewportContainer) {
+        let pageScrollRaf = null;
+        viewportContainer.addEventListener('scroll', () => {
+            if (AppState.viewLayout !== 'page' || pageScrollRaf !== null) return;
+            pageScrollRaf = requestAnimationFrame(() => {
+                pageScrollRaf = null;
+                renderScore();
+            });
+        }, { passive: true });
+    }
 
     // Keyboard shortcuts (Space = Play/Pause, Right Arrow = Step Beat)
     window.addEventListener('keydown', (e) => {

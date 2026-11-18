@@ -407,7 +407,7 @@ function renderHorizontalRibbon(ctx, width, height, palette) {
 
     const leftMargin = isCompact ? 14 : 28;
     const rightMargin = isCompact ? 8 : 16;
-    const currentMeas = AppState.measures[AppState.currentMeasureIndex] || AppState.measures[0];
+    const currentMeas = getMeasureByIndex(AppState.currentMeasureIndex) || AppState.measures[0];
     if (!currentMeas) return;
 
     // Draw full-width staff lines
@@ -446,12 +446,14 @@ function renderHorizontalRibbon(ctx, width, height, palette) {
         : (AppState.currentBeatFloat / currentMeas.beatsPerMeasure);
     const globalScrollX = (AppState.currentMeasureIndex + scrollFraction) * measureWidth;
 
-    // Render visible window of measures
-    const startMeasIdx = Math.max(0, AppState.currentMeasureIndex - 1);
-    const endMeasIdx = Math.min(AppState.measures.length - 1, AppState.currentMeasureIndex + 6);
+    // Render visible window of measures (supports rolling measureWindowOffset pruning)
+    const maxGlobalIdx = AppState.measureWindowOffset + AppState.measures.length - 1;
+    const startMeasIdx = Math.max(AppState.measureWindowOffset, AppState.currentMeasureIndex - 1);
+    const endMeasIdx = Math.min(maxGlobalIdx, AppState.currentMeasureIndex + 6);
 
     for (let mIdx = startMeasIdx; mIdx <= endMeasIdx; mIdx++) {
-        const measure = AppState.measures[mIdx];
+        const measure = getMeasureByIndex(mIdx);
+        if (!measure) continue;
         const measX = playheadAnchorX + (mIdx * measureWidth) - globalScrollX;
 
         // Draw playhead highlight inside active measure
@@ -486,14 +488,20 @@ function renderHorizontalRibbon(ctx, width, height, palette) {
     ctx.restore();
 }
 
-// Render Multi-Line Page View mode with generous vertical separation so systems never collide
+// Render Multi-Line Page View mode with viewport row culling so off-screen systems don't waste 60fps CPU/battery
 function renderPageSystems(ctx, width, totalHeight, measuresPerRow, rowHeight, palette, isCompact = false) {
     const lineGap = isCompact ? 8.4 : 10.0;
     const leftMargin = isCompact ? 16 : 32;
     const rightMargin = isCompact ? 12 : 28;
     const totalRows = Math.ceil(AppState.measures.length / measuresPerRow);
 
-    for (let row = 0; row < totalRows; row++) {
+    const container = document.getElementById('scoreViewportContainer');
+    const scrollTop = (container && typeof container.scrollTop === 'number') ? container.scrollTop : 0;
+    const viewHeight = (container && container.clientHeight) ? container.clientHeight : totalHeight;
+    const firstVisibleRow = Math.max(0, Math.floor((scrollTop - rowHeight) / rowHeight));
+    const lastVisibleRow = Math.min(totalRows - 1, Math.ceil((scrollTop + viewHeight + rowHeight) / rowHeight));
+
+    for (let row = firstVisibleRow; row <= lastVisibleRow; row++) {
         const rowTop = (isCompact ? 48 : 56) + row * rowHeight;
         const trebleTopY = rowTop + (isCompact ? 32 : 42);
         const bassTopY = Math.round(trebleTopY + lineGap * (isCompact ? 9.2 : 10.2));
@@ -519,14 +527,14 @@ function renderPageSystems(ctx, width, totalHeight, measuresPerRow, rowHeight, p
         const measureWidth = availableWidth / measuresPerRow;
 
         for (let col = 0; col < measuresPerRow; col++) {
-            const mIdx = row * measuresPerRow + col;
-            const measure = AppState.measures[mIdx];
+            const localIdx = row * measuresPerRow + col;
+            const measure = AppState.measures[localIdx];
             if (!measure) break;
 
             const measX = headerEndX + col * measureWidth;
 
-            // Draw active playhead cursor on the current measure
-            if (mIdx === AppState.currentMeasureIndex) {
+            // Draw active playhead cursor on the current measure (matched by immutable global measure.index)
+            if (measure.index === AppState.currentMeasureIndex) {
                 const paddingX = isCompact ? 20 : 28;
                 const innerW = measureWidth - paddingX * 2;
                 const cursorX = measX + paddingX + (AppState.currentBeatFloat / measure.beatsPerMeasure) * innerW;
@@ -608,9 +616,8 @@ function drawSingleMeasure(ctx, measure, measX, measWidth, trebleTopY, bassTopY,
     const staffHeight = lineGap * 4;
     const midGrandY = (trebleTopY + staffHeight + bassTopY) / 2;
 
-    // Detect mid-stream key modulation from previous measure
-    const measArrIdx = AppState.measures.indexOf(measure);
-    const prevMeas = measArrIdx > 0 ? AppState.measures[measArrIdx - 1] : null;
+    // Detect mid-stream key modulation from previous measure in O(1)
+    const prevMeas = measure.index > 0 ? getMeasureByIndex(measure.index - 1) : null;
     const sigInfo = getModalSignatureInfo(measure.rootKey, measure.mode);
     const prevSigInfo = prevMeas ? getModalSignatureInfo(prevMeas.rootKey, prevMeas.mode) : null;
     const showModKeyChange = !suppressModKeySig && prevSigInfo && prevSigInfo.fifths !== sigInfo.fifths;
@@ -1031,6 +1038,28 @@ function drawStaffEvents(ctx, events, measure, isTreble, startX, usableWidth, st
     const rx = lineGap * 0.59;
     const ry = lineGap * 0.45;
 
+    // Multi-column collision-free accidental layout helper (re-used if beaming flips stem direction)
+    const layoutEventAccidentals = (noteInfos) => {
+        const leftmostNoteX = Math.min(...noteInfos.map(n => n.noteX));
+        const colLastYs = []; // Tracks last Y placed in each accidental column
+        for (let nIdx = noteInfos.length - 1; nIdx >= 0; nIdx--) {
+            const n = noteInfos[nIdx];
+            if (!n.accidental) {
+                n.accX = undefined;
+                continue;
+            }
+            let assignedCol = 0;
+            while (
+                colLastYs[assignedCol] !== undefined &&
+                Math.abs(n.y - colLastYs[assignedCol]) < lineGap * 2.65
+            ) {
+                assignedCol++;
+            }
+            colLastYs[assignedCol] = n.y;
+            n.accX = leftmostNoteX - rx - lineGap * 0.72 - assignedCol * (lineGap * 1.05);
+        }
+    };
+
     // Pre-compute layout geometry for all events so eighth-note beams and accidentals never collide
     const prepared = events.map((ev, i) => {
         const x = startX + (ev.startBeat / measure.beatsPerMeasure) * usableWidth;
@@ -1053,9 +1082,11 @@ function drawStaffEvents(ctx, events, measure, isTreble, startX, usableWidth, st
 
         const noteInfos = ev.notes.map(midi => {
             const info = midiToStaffStepAndAccidental(midi, measure.rootKey, measure.mode, measureStepAccMap, measure.chord);
+            // Engraving convention: tied-in notes keep their pitch in measureStepAccMap without re-printing the accidental
+            const accidental = ev.isTiedFromPrev ? '' : info.accidental;
             const y = stepToStaffY(info.step, isTreble, staffTopY, lineGap);
             const isGuide = measure.chord.guideTonePcs.has(info.pc);
-            return { midi, ...info, y, isGuide };
+            return { midi, ...info, accidental, y, isGuide };
         }).sort((a, b) => b.y - a.y); // Bottom-most note first (largest Y)
 
         const bottomNote = noteInfos[0];
@@ -1078,22 +1109,7 @@ function drawStaffEvents(ctx, events, measure, isTreble, startX, usableWidth, st
                 : x;
         }
 
-        // Multi-column collision-free accidental layout (top note to bottom note)
-        const leftmostNoteX = Math.min(...noteInfos.map(n => n.noteX));
-        const colLastYs = []; // Tracks last Y placed in each accidental column
-        for (let nIdx = noteInfos.length - 1; nIdx >= 0; nIdx--) {
-            const n = noteInfos[nIdx];
-            if (!n.accidental) continue;
-            let assignedCol = 0;
-            while (
-                colLastYs[assignedCol] !== undefined &&
-                Math.abs(n.y - colLastYs[assignedCol]) < lineGap * 2.65
-            ) {
-                assignedCol++;
-            }
-            colLastYs[assignedCol] = n.y;
-            n.accX = leftmostNoteX - rx - lineGap * 0.72 - assignedCol * (lineGap * 1.05);
-        }
+        layoutEventAccidentals(noteInfos);
 
         // Exact SMuFL stem anchor (stemUpSE / stemDownNW)
         const stemX = stemUp ? (x + rx - 0.6) : (x - rx + 0.6);
@@ -1149,6 +1165,8 @@ function drawStaffEvents(ctx, events, measure, isTreble, startX, usableWidth, st
                         ? (groupStemUp ? (item.x + rx * 1.88) : (item.x - rx * 1.88))
                         : item.x;
                 }
+                // Re-layout accidentals after potential stem flip so displaced noteheads never collide with accidentals
+                layoutEventAccidentals(item.noteInfos);
                 item.stemX = groupStemUp ? (item.x + rx - 0.6) : (item.x - rx + 0.6);
                 item.stemStartY = groupStemUp ? (item.bottomNote.y - lineGap * 0.16) : (item.topNote.y + lineGap * 0.16);
             }
@@ -1294,7 +1312,14 @@ function drawStaffEvents(ctx, events, measure, isTreble, startX, usableWidth, st
             const n = noteInfos[nIdx];
 
             let fillColor = palette.ink;
-            if (isCurrentlyPlaying) {
+            const isWaitSatisfied = (
+                isCurrentlyPlaying &&
+                (AppState.scrollMode === 'midi_wait' || AppState.scrollMode === 'mic_wait') &&
+                AppState.satisfiedSubBeatNotes.has(n.midi)
+            );
+            if (isWaitSatisfied) {
+                fillColor = AppState.sheetTheme === 'dark' ? '#10b981' : '#059669';
+            } else if (isCurrentlyPlaying) {
                 fillColor = isTreble ? palette.rhHighlight : palette.lhHighlight;
             } else if (AppState.highlightGuideTones && n.isGuide) {
                 fillColor = palette.guideTone;
@@ -1405,24 +1430,43 @@ function drawStaffEvents(ctx, events, measure, isTreble, startX, usableWidth, st
             ctx.restore();
         }
 
-        // 6. Draw Crescent Tie curves (incoming from previous barline and/or outgoing to next note/barline)
-        if (ev.isTiedFromPrev) {
-            const leftmostNoteX = Math.min(...noteInfos.map(n => n.noteX));
-            const inTieStartX = measureBounds ? (measureBounds.measX + 2) : (x - rx - 14);
-            const inTieEndX = Math.max(inTieStartX + 6, leftmostNoteX - rx - 3);
-            const curveUp = !stemUp;
-            const tieY = curveUp ? (topNote.y - ry - 2) : (bottomNote.y + ry + 2);
-            drawEngravedTie(ctx, inTieStartX, inTieEndX, tieY, curveUp, lineGap, palette.ink);
+        // 6. Draw Crescent Tie curves for every tied voice (incoming barline tie, outgoing barline tie, or intra-bar tie)
+        const isFromBarline = ev.startBeat < 0.05;
+        if (ev.isTiedFromPrev && isFromBarline) {
+            for (let nIdx = 0; nIdx < noteInfos.length; nIdx++) {
+                const n = noteInfos[nIdx];
+                const inTieStartX = measureBounds ? (measureBounds.measX + 2) : (n.noteX - rx - 14);
+                const inTieEndX = Math.max(inTieStartX + 6, n.noteX - rx - 3);
+                const curveUp = noteInfos.length === 1
+                    ? !stemUp
+                    : (nIdx >= Math.ceil(noteInfos.length / 2));
+                const tieY = curveUp ? (n.y - ry - 2) : (n.y + ry + 2);
+                drawEngravedTie(ctx, inTieStartX, inTieEndX, tieY, curveUp, lineGap, palette.ink);
+            }
         }
         if (ev.tieToNext) {
-            const tieStartX = rightmostNoteX + rx + 3;
             const crossesBarline = ev.startBeat + ev.durationBeats >= measure.beatsPerMeasure - 0.05;
-            const tieEndX = (crossesBarline && measureBounds)
-                ? (measureBounds.measX + measureBounds.measWidth - 2)
-                : (x + (ev.durationBeats / measure.beatsPerMeasure) * usableWidth - 5);
-            const curveUp = !stemUp;
-            const tieY = curveUp ? (topNote.y - ry - 2) : (bottomNote.y + ry + 2);
-            drawEngravedTie(ctx, tieStartX, tieEndX, tieY, curveUp, lineGap, palette.ink);
+            const nextPrepared = (!crossesBarline && i + 1 < prepared.length && prepared[i + 1].isNote)
+                ? prepared[i + 1]
+                : null;
+            for (let nIdx = 0; nIdx < noteInfos.length; nIdx++) {
+                const n = noteInfos[nIdx];
+                const tieStartX = n.noteX + rx + 3;
+                let tieEndX;
+                if (crossesBarline && measureBounds) {
+                    tieEndX = measureBounds.measX + measureBounds.measWidth - 2;
+                } else if (nextPrepared) {
+                    const targetNote = nextPrepared.noteInfos.find(nn => nn.midi === n.midi) || nextPrepared.noteInfos[0];
+                    tieEndX = (targetNote ? targetNote.noteX : nextPrepared.x) - rx - 3;
+                } else {
+                    tieEndX = x + (ev.durationBeats / measure.beatsPerMeasure) * usableWidth - 5;
+                }
+                const curveUp = noteInfos.length === 1
+                    ? !stemUp
+                    : (nIdx >= Math.ceil(noteInfos.length / 2));
+                const tieY = curveUp ? (n.y - ry - 2) : (n.y + ry + 2);
+                drawEngravedTie(ctx, tieStartX, Math.max(tieStartX + 6, tieEndX), tieY, curveUp, lineGap, palette.ink);
+            }
         }
 
         ctx.restore();
@@ -1500,6 +1544,7 @@ function drawRestGlyph(ctx, x, staffTopY, lineGap, durationBeats, palette) {
         ctx.arc(x - lineGap * 0.15, topY + lineGap * 0.28, lineGap * 0.28, 0, Math.PI * 2);
         ctx.fill();
         ctx.beginPath();
+        ctx.moveTo(x - lineGap * 0.12, topY + lineGap * 0.45);
         ctx.quadraticCurveTo(x, topY + lineGap * 0.55, x + lineGap * 0.32, topY + lineGap * 0.15);
         ctx.stroke();
     } else {

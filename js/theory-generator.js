@@ -117,14 +117,14 @@ function buildContemplativeChord(rootKey, mode, degree, richness, preset) {
     let seventhPc = scalePcs[(degree + 6) % 7];
     const ninthPc = scalePcs[(degree + 1) % 7];
 
-    // Handle modal borrowed chord (e.g. minor iv in Major or V7 in minor) when richness === 'borrowed'
+    // Handle modal borrowed chord (e.g. minor iv6 in Major or V7/V in Major/Modal) when richness === 'borrowed'
     let isBorrowedMinorIv = false;
     let isSecondaryDom = false;
     if (richness === 'borrowed') {
         if (mode === 'major' && degree === 3 && Math.random() < 0.45) {
-            // Borrow minor iv (flatten the 3rd of IV)
+            // Borrow minor iv6 (flatten the 3rd of IV and add major 6th = D natural in C major)
             thirdPc = (rootPc + 3) % 12;
-            seventhPc = (rootPc + 10) % 12;
+            seventhPc = (rootPc + 9) % 12;
             isBorrowedMinorIv = true;
         } else if (degree === 1 && Math.random() < 0.3) {
             // Secondary dominant V7/V (II7)
@@ -137,7 +137,7 @@ function buildContemplativeChord(rootKey, mode, degree, richness, preset) {
     // Compute intervals relative to chord root
     const thirdInterval = (thirdPc - rootPc + 12) % 12; // 3 = minor, 4 = major
     const fifthInterval = (fifthPc - rootPc + 12) % 12; // 7 = perfect, 6 = dim
-    const seventhInterval = (seventhPc - rootPc + 12) % 12; // 10 = m7, 11 = Maj7
+    const seventhInterval = (seventhPc - rootPc + 12) % 12; // 9 = 6th (iv6), 10 = m7, 11 = Maj7
 
     const isMinor = thirdInterval === 3;
     const isDim = fifthInterval === 6;
@@ -156,12 +156,14 @@ function buildContemplativeChord(rootKey, mode, degree, richness, preset) {
     // Determine active chord tones and extensions based on richness
     const chordPcs = [rootPc, thirdPc, fifthPc];
     const guideTonePcs = new Set([thirdPc]);
+    const hasSeventh = (richness === 'sevenths' || richness === 'extensions' || richness === 'borrowed');
+    let hasNinth = false;
 
-    if (richness === 'sevenths' || richness === 'extensions' || richness === 'borrowed') {
+    if (hasSeventh) {
         chordPcs.push(seventhPc);
         guideTonePcs.add(seventhPc);
 
-        if (!isDim) {
+        if (!isDim && !isBorrowedMinorIv) {
             if (isMaj7 && !isMinor) {
                 suffix = 'maj7';
                 romanSuffix = 'Δ7';
@@ -175,17 +177,19 @@ function buildContemplativeChord(rootKey, mode, degree, richness, preset) {
         }
     }
 
-    if (richness === 'extensions' || (richness === 'borrowed' && !isDim)) {
+    if ((richness === 'extensions' || (richness === 'borrowed' && !isDim)) && !isBorrowedMinorIv && !isSecondaryDom) {
         // Add lush 9ths, add9, or sus2 for Minecraft / Gymnopédie / Licorice
         const ninthInterval = (ninthPc - rootPc + 12) % 12;
         if (ninthInterval === 2) {
             if (preset === 'minecraft' && Math.random() < 0.45 && !isMinor) {
                 // Replace or augment with add9 / sus2
                 chordPcs.push(ninthPc);
+                hasNinth = true;
                 suffix = isMaj7 ? 'maj9' : 'add9';
                 romanSuffix = isMaj7 ? 'Δ9' : 'add9';
             } else if (Math.random() < 0.65) {
                 chordPcs.push(ninthPc);
+                hasNinth = true;
                 if (isMaj7 && !isMinor) {
                     suffix = 'maj9';
                     romanSuffix = 'Δ9';
@@ -214,8 +218,10 @@ function buildContemplativeChord(rootKey, mode, degree, richness, preset) {
         rootPc,
         thirdPc,
         fifthPc,
-        seventhPc,
-        ninthPc,
+        seventhPc: hasSeventh ? seventhPc : null,
+        ninthPc: hasNinth ? ninthPc : null,
+        hasSeventh,
+        hasNinth,
         chordPcs,
         guideTonePcs,
         preferFlats: isBorrowedMinorIv,
@@ -225,7 +231,7 @@ function buildContemplativeChord(rootKey, mode, degree, richness, preset) {
     };
 }
 
-// Parsimonious voice-leading helper: minimizes semitone movement from prevVoicingMidis across C3–F4
+// Parsimonious voice-leading helper: minimizes semitone movement from prevVoicingMidis across C3–G4
 function buildSmoothLeftHandVoicing(chord, prevVoicingMidis) {
     // Pick warm bass root in [36..50] closest to previous bass note (default around D2..C3)
     const prevBass = (prevVoicingMidis && prevVoicingMidis.length > 0) ? prevVoicingMidis[0] : 43;
@@ -238,12 +244,14 @@ function buildSmoothLeftHandVoicing(chord, prevVoicingMidis) {
     bassCandidates.sort((a, b) => Math.abs(a - prevBass) - Math.abs(b - prevBass));
     const bassMidi = bassCandidates[0];
 
-    // Select 3 upper chord-tone pitch classes (3rd, 7th/5th, 9th/5th)
-    const targetPcs = [
-        chord.thirdPc,
-        chord.seventhPc !== undefined ? chord.seventhPc : chord.fifthPc,
-        chord.ninthPc !== undefined && AppState.harmonicRichness === 'extensions' ? chord.ninthPc : chord.fifthPc
-    ];
+    // Select 3 upper chord-tone pitch classes strictly respecting chord richness (triads vs 7ths vs 9ths)
+    const targetPcs = chord.hasSeventh
+        ? [
+            chord.thirdPc,
+            chord.seventhPc !== null && chord.seventhPc !== undefined ? chord.seventhPc : chord.fifthPc,
+            chord.hasNinth && chord.ninthPc !== null && chord.ninthPc !== undefined ? chord.ninthPc : chord.fifthPc
+        ]
+        : [chord.thirdPc, chord.fifthPc, chord.rootPc];
     const uniquePcs = [...new Set(targetPcs)];
     while (uniquePcs.length < 3) {
         uniquePcs.push(chord.rootPc);
@@ -267,7 +275,7 @@ function buildSmoothLeftHandVoicing(chord, prevVoicingMidis) {
         return list;
     });
 
-    // Exhaustively score permutations to minimize total semitone movement while keeping voices uncluttered
+    // Exhaustively score permutations to minimize total semitone movement while keeping 1-hand spans ergonomic
     const perms = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
     let bestUpper = null;
     let bestCost = Infinity;
@@ -284,16 +292,17 @@ function buildSmoothLeftHandVoicing(chord, prevVoicingMidis) {
             return bestM;
         }).sort((a, b) => a - b);
 
-        // Penalize unison overlaps or overly wide 1-hand spans (>14 semis)
+        // Enforce playable 1-hand block span (<= 12 semitones / 1 octave) and reject unison overlaps
         if (chosen[0] === chosen[1] || chosen[1] === chosen[2]) continue;
         const span = chosen[2] - chosen[0];
-        if (span > 14) continue;
+        if (span > 12) continue;
 
         const motionCost = Math.abs(chosen[0] - prevUpper[0])
             + Math.abs(chosen[1] - prevUpper[1])
             + Math.abs(chosen[2] - prevUpper[2]);
+        const spanPenalty = span > 10 ? (span - 10) * 1.5 : 0;
         const centerPenalty = Math.abs(((chosen[0] + chosen[2]) / 2) - 58) * 0.25;
-        const totalCost = motionCost + centerPenalty;
+        const totalCost = motionCost + spanPenalty + centerPenalty;
         if (totalCost < bestCost) {
             bestCost = totalCost;
             bestUpper = chosen;
@@ -358,7 +367,7 @@ function generateNextMeasure() {
     const pedFlags = computePedagogyFlagsForMeasureIndex(measureIndex);
     const nextPedFlags = computePedagogyFlagsForMeasureIndex(measureIndex + 1);
     const nextWillModulate = (AppState.progressiveModulation && ((measureIndex + 1) % 8 === 0));
-    const prevMeas = measureIndex > 0 ? AppState.measures[measureIndex - 1] : null;
+    const prevMeas = measureIndex > 0 ? getMeasureByIndex(measureIndex - 1) : null;
     const prevLastRh = (prevMeas && prevMeas.rhEvents && prevMeas.rhEvents.length > 0)
         ? prevMeas.rhEvents[prevMeas.rhEvents.length - 1]
         : null;
@@ -387,32 +396,35 @@ function generateNextMeasure() {
     const voicing = buildSmoothLeftHandVoicing(chord, AppState.lastVoicingMidis);
     AppState.lastVoicingMidis = [voicing.bassMidi, ...voicing.upperMidis];
 
+    // Authentic diatonic fifth interval (+7 for major/minor, +6 for diminished chords)
+    const fifthInterval = (chord.fifthPc - chord.rootPc + 12) % 12;
+    const diatonicFifthMidi = voicing.bassMidi + fifthInterval;
+    const octaveMidi = voicing.bassMidi + 12;
+
     const lhEvents = [];
     const rhEvents = [];
 
     // ==================== 1. LEFT HAND (BASS CLEF) GENERATION ====================
     if (isSixEight) {
         // Authentic Compound Duple (6/8 = 2 dotted-quarter beats of 1.5 quarter-beats each)
-        const fifthMidi = voicing.bassMidi + 7;
-        const octaveMidi = voicing.bassMidi + 12;
         if (lhPattern === 'satie') {
             lhEvents.push({ startBeat: 0, durationBeats: 1.5, notes: [voicing.bassMidi], isRest: false });
             lhEvents.push({ startBeat: 1.5, durationBeats: 1.5, notes: voicing.upperMidis, isRest: false });
         } else if (lhPattern === 'arpeggio_slow') {
             // Flowing Barcarolle compound lilt: quarter + eighth | quarter + eighth
             lhEvents.push({ startBeat: 0, durationBeats: 1, notes: [voicing.bassMidi], isRest: false });
-            lhEvents.push({ startBeat: 1, durationBeats: 0.5, notes: [fifthMidi], isRest: false });
+            lhEvents.push({ startBeat: 1, durationBeats: 0.5, notes: [diatonicFifthMidi], isRest: false });
             lhEvents.push({ startBeat: 1.5, durationBeats: 1, notes: [octaveMidi], isRest: false });
             lhEvents.push({ startBeat: 2.5, durationBeats: 0.5, notes: [voicing.upperMidis[0]], isRest: false });
         } else if (lhPattern === 'nordic_fifths') {
-            lhEvents.push({ startBeat: 0, durationBeats: 1.5, notes: [voicing.bassMidi, fifthMidi], isRest: false });
-            lhEvents.push({ startBeat: 1.5, durationBeats: 1.5, notes: [fifthMidi, octaveMidi], isRest: false });
+            lhEvents.push({ startBeat: 0, durationBeats: 1.5, notes: [voicing.bassMidi, diatonicFifthMidi], isRest: false });
+            lhEvents.push({ startBeat: 1.5, durationBeats: 1.5, notes: [diatonicFifthMidi, octaveMidi], isRest: false });
         } else if (lhPattern === 'sustained_voicing') {
             lhEvents.push({ startBeat: 0, durationBeats: 3, notes: [voicing.bassMidi, voicing.upperMidis[0], voicing.upperMidis[1]], isRest: false });
         } else if (lhPattern === 'ostinato_eighths') {
             const top1 = voicing.upperMidis[0];
             const top2 = voicing.upperMidis[1];
-            const pattern6 = [voicing.bassMidi, fifthMidi, top1, top2, fifthMidi, top1];
+            const pattern6 = [voicing.bassMidi, diatonicFifthMidi, top1, top2, diatonicFifthMidi, top1];
             for (let e = 0; e < 6; e++) {
                 lhEvents.push({ startBeat: e * 0.5, durationBeats: 0.5, notes: [pattern6[e]], isRest: false });
             }
@@ -448,10 +460,8 @@ function generateNextMeasure() {
         }
     } else if (lhPattern === 'arpeggio_slow') {
         // Gentle quarter-note broken arpeggio (1 - 5 - 8 - 10)
-        const fifthMidi = voicing.bassMidi + 7;
-        const octaveMidi = voicing.bassMidi + 12;
         const tenthMidi = voicing.upperMidis[0] > octaveMidi ? voicing.upperMidis[0] : voicing.upperMidis[0] + 12;
-        const arpPool = [voicing.bassMidi, fifthMidi, octaveMidi, tenthMidi, fifthMidi];
+        const arpPool = [voicing.bassMidi, diatonicFifthMidi, octaveMidi, tenthMidi, diatonicFifthMidi];
         for (let b = 0; b < beatsPerMeasure; b++) {
             lhEvents.push({
                 startBeat: b,
@@ -462,49 +472,64 @@ function generateNextMeasure() {
         }
     } else if (lhPattern === 'nordic_fifths') {
         // Resonant open fifths and octaves (Skyrim style)
-        const fifthMidi = voicing.bassMidi + 7;
-        const octaveMidi = voicing.bassMidi + 12;
         if (beatsPerMeasure >= 4) {
             lhEvents.push({
                 startBeat: 0,
                 durationBeats: 2,
-                notes: [voicing.bassMidi, fifthMidi],
+                notes: [voicing.bassMidi, diatonicFifthMidi],
                 isRest: false
             });
             lhEvents.push({
                 startBeat: 2,
                 durationBeats: beatsPerMeasure - 2,
-                notes: [fifthMidi, octaveMidi],
+                notes: [diatonicFifthMidi, octaveMidi],
                 isRest: false
             });
         } else {
             lhEvents.push({
                 startBeat: 0,
                 durationBeats: 2,
-                notes: [voicing.bassMidi, fifthMidi, octaveMidi],
+                notes: [voicing.bassMidi, diatonicFifthMidi, octaveMidi],
                 isRest: false
             });
             lhEvents.push({
                 startBeat: 2,
                 durationBeats: 1,
-                notes: [fifthMidi],
+                notes: [diatonicFifthMidi],
                 isRest: false
             });
         }
     } else if (lhPattern === 'sustained_voicing') {
-        // Sustained close-voiced guide-tone chords
-        lhEvents.push({
-            startBeat: 0,
-            durationBeats: beatsPerMeasure,
-            notes: [voicing.bassMidi, voicing.upperMidis[0], voicing.upperMidis[1]],
-            isRest: false
-        });
+        // Sustained close-voiced guide-tone chords (split 5/4 into authentic tied 3 + 2 notation)
+        const sustainedNotes = [voicing.bassMidi, voicing.upperMidis[0], voicing.upperMidis[1]];
+        if (beatsPerMeasure === 5) {
+            lhEvents.push({
+                startBeat: 0,
+                durationBeats: 3,
+                notes: sustainedNotes,
+                isRest: false,
+                tieToNext: true
+            });
+            lhEvents.push({
+                startBeat: 3,
+                durationBeats: 2,
+                notes: [...sustainedNotes],
+                isRest: false,
+                isTiedFromPrev: true
+            });
+        } else {
+            lhEvents.push({
+                startBeat: 0,
+                durationBeats: beatsPerMeasure,
+                notes: sustainedNotes,
+                isRest: false
+            });
+        }
     } else if (lhPattern === 'ostinato_eighths') {
         // Continuous eighth-note broken chords (Licorice / Neo-classical style)
-        const fifthMidi = voicing.bassMidi + 7;
         const top1 = voicing.upperMidis[0];
         const top2 = voicing.upperMidis[1];
-        const pattern = [voicing.bassMidi, fifthMidi, top1, fifthMidi, top2, fifthMidi, top1, fifthMidi];
+        const pattern = [voicing.bassMidi, diatonicFifthMidi, top1, diatonicFifthMidi, top2, diatonicFifthMidi, top1, diatonicFifthMidi];
         const totalEighths = beatsPerMeasure * 2;
         for (let e = 0; e < totalEighths; e++) {
             lhEvents.push({
@@ -846,7 +871,9 @@ function generateNextMeasure() {
 
     // Compute comfortable Treble register guide/chord tones (C4=60 to G5=79) for Guided Improvisation
     const improGuideMidis = [];
-    const targetPcs = [chord.rootPc, chord.thirdPc, chord.fifthPc, chord.seventhPc];
+    const targetPcs = chord.hasSeventh && chord.seventhPc !== null
+        ? [chord.rootPc, chord.thirdPc, chord.fifthPc, chord.seventhPc]
+        : [chord.rootPc, chord.thirdPc, chord.fifthPc];
     let cursorMidi = 60 + chord.rootPc;
     if (cursorMidi < 62) cursorMidi += 12; // Keep nicely centered on the Treble staff
     for (const pc of targetPcs) {
@@ -869,6 +896,7 @@ function generateNextMeasure() {
         timeSig,
         beatsPerMeasure,
         chord,
+        voicingMidis: [voicing.bassMidi, ...voicing.upperMidis],
         lhEvents,
         rhEvents,
         improGuideMidis,
@@ -876,6 +904,13 @@ function generateNextMeasure() {
         earRevealed: false,
         isImprovisation: pedFlags.isImprovisation
     };
+}
+
+// Resolve a measure by its global 0-based index while supporting rolling window pruning
+function getMeasureByIndex(globalIndex) {
+    const localIdx = globalIndex - AppState.measureWindowOffset;
+    if (localIdx < 0 || localIdx >= AppState.measures.length) return null;
+    return AppState.measures[localIdx];
 }
 
 // Determine if a measure index is an Ear Training or Guided Improvisation measure
@@ -921,6 +956,7 @@ function syncPedagogyFlagsOnMeasures() {
 // Populate initial sliding window of measures
 function rebuildScoreStream() {
     AppState.measures = [];
+    AppState.measureWindowOffset = 0;
     AppState.generatedMeasureCounter = 0;
     AppState.currentMeasureIndex = 0;
     AppState.currentBeatFloat = 0;
@@ -940,20 +976,48 @@ function rebuildScoreStream() {
     renderScore();
 }
 
-// Ensure infinite lookahead buffer always has at least 10 measures ahead of playhead
+// Ensure infinite lookahead buffer always has >=12 measures ahead while pruning old measures to bound RAM & Page canvas height
 function ensureInfiniteBuffer() {
-    while (AppState.measures.length < AppState.currentMeasureIndex + 12) {
+    while (AppState.measureWindowOffset + AppState.measures.length < AppState.currentMeasureIndex + 12) {
         AppState.measures.push(generateNextMeasure());
+    }
+    // Prune in multiples of 24 (LCM of 2/3/4 measures-per-row and 8-bar periods) to keep Page rows & phrases aligned
+    const behindCount = AppState.currentMeasureIndex - AppState.measureWindowOffset;
+    if (behindCount >= 48) {
+        const pruneCount = Math.floor((behindCount - 24) / 24) * 24;
+        if (pruneCount > 0) {
+            AppState.measures.splice(0, pruneCount);
+            AppState.measureWindowOffset += pruneCount;
+        }
     }
 }
 
 // Regenerate upcoming measures seamlessly when a user tweaks any parameter live
 function refreshUpcomingMeasuresLive(applyCurrentIfPausedAtStart = true) {
     const canReplaceCurrent = applyCurrentIfPausedAtStart && !AppState.isPlaying && AppState.currentBeatFloat < 0.05;
-    const keepUntil = canReplaceCurrent ? AppState.currentMeasureIndex : (AppState.currentMeasureIndex + 1);
-    AppState.measures = AppState.measures.slice(0, keepUntil);
-    AppState.generatedMeasureCounter = keepUntil;
+    const keepGlobalUntil = canReplaceCurrent ? AppState.currentMeasureIndex : (AppState.currentMeasureIndex + 1);
+    const keepLocalCount = Math.max(0, keepGlobalUntil - AppState.measureWindowOffset);
+    AppState.measures = AppState.measures.slice(0, keepLocalCount);
+    AppState.generatedMeasureCounter = AppState.measureWindowOffset + AppState.measures.length;
     AppState.generationRootKey = AppState.rootKey;
+
+    // Restore voice-leading memory from the last kept measure so newly generated measures connect smoothly
+    const lastKept = AppState.measures.length > 0 ? AppState.measures[AppState.measures.length - 1] : null;
+    if (lastKept) {
+        AppState.lastChordDegree = lastKept.chord ? lastKept.chord.degree : 0;
+        if (lastKept.voicingMidis && lastKept.voicingMidis.length >= 4) {
+            AppState.lastVoicingMidis = [...lastKept.voicingMidis];
+        }
+        const lastPitchedRh = [...(lastKept.rhEvents || [])].reverse().find(e => !e.isRest && e.notes && e.notes.length > 0);
+        if (lastPitchedRh) {
+            AppState.lastMelodyMidi = lastPitchedRh.notes[lastPitchedRh.notes.length - 1];
+        }
+    } else {
+        AppState.lastChordDegree = 0;
+        AppState.lastMelodyMidi = 69;
+        AppState.lastVoicingMidis = [50, 57, 60, 64];
+    }
+
     AppState.phraseState.periodIdx = -1;
     AppState.phraseState.motifEvents = [];
     ensureInfiniteBuffer();
