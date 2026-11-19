@@ -22,6 +22,7 @@ function getEffectiveTiedDurationBeats(events, evIdx, measure, isTreble) {
 
 // 8-bar period expressive dynamic contour (gentle opening -> bar 6 climax -> warm bar 8 cadence)
 const PHRASE_DYNAMIC_CURVE = [0.88, 0.93, 0.97, 0.91, 1.00, 1.08, 0.96, 0.84];
+const MACRO_SECTION_DYNAMIC_MULT = { 'A': 0.95, "A'": 1.01, 'B': 1.07, "A''": 0.92 };
 
 // Compute LH & RH gain multipliers from AppState.handBalance (-1 = LH solo, 0 = balanced, +1 = RH solo)
 function getHandBalanceGains() {
@@ -31,21 +32,41 @@ function getHandBalanceGains() {
     return { lhScale, rhScale };
 }
 
-// Compute expressive velocity for a given bar, beat position, and hand
+// Compute gentle phrase-end cadence rubato (subtle ritardando on bar 4 half-cadence and bar 8 resolution)
+function getEffectiveTempoForSubBeat(measure, subBeat) {
+    const baseTempo = AppState.tempo;
+    if (!measure || typeof measure.barInPeriod !== 'number') return baseTempo;
+    const dna = getThemeDNA(measure.preset || AppState.activePreset);
+    const strength = dna.rubatoStrength || 1.0;
+    let factor = 1.0;
+    if (measure.barInPeriod === 7) {
+        const progress = Math.min(1, Math.max(0, subBeat / Math.max(1, measure.beatsPerMeasure)));
+        factor = 1.0 - (0.06 + 0.08 * progress) * strength;
+    } else if (measure.barInPeriod === 3 && subBeat >= measure.beatsPerMeasure - 1.5) {
+        factor = 1.0 - 0.05 * strength;
+    }
+    return Math.max(36, baseTempo * factor);
+}
+
+// Compute expressive velocity for a given bar, 32-bar macro section, beat position, and hand
 function computeExpressiveVelocity(baseVel, measure, subBeat, handScale) {
     const barIdx = typeof measure.barInPeriod === 'number' ? (measure.barInPeriod % 8) : 0;
     const phraseMult = PHRASE_DYNAMIC_CURVE[barIdx] || 1.0;
+    const macroMult = (measure.macroSection && MACRO_SECTION_DYNAMIC_MULT[measure.macroSection]) || 1.0;
     const isDownbeat = Math.abs(subBeat) < 0.01;
     const isOffbeatEighth = Math.abs(subBeat - Math.round(subBeat)) > 0.1;
     const metricOffset = isDownbeat ? 0.04 : (isOffbeatEighth ? -0.04 : 0);
     const humanize = (Math.random() - 0.5) * 0.03;
-    return Math.max(0.10, Math.min(1.0, (baseVel * phraseMult + metricOffset + humanize) * handScale));
+    return Math.max(0.10, Math.min(1.0, (baseVel * phraseMult * macroMult + metricOffset + humanize) * handScale));
 }
 
-// Trigger all notes scheduled at a specific sub-beat (0.5 beat resolution) with exact AudioContext startTime
+// Trigger all notes scheduled at a specific sub-beat (0.5 beat resolution) with exact AudioContext startTime & soft chord roll
 function triggerMeasureBeatAudio(measure, subBeat, playSound = true, startTime = null) {
-    const beatDurationSec = 60 / AppState.tempo;
+    const effTempo = getEffectiveTempoForSubBeat(measure, subBeat);
+    const beatDurationSec = 60 / effTempo;
     const { lhScale, rhScale } = getHandBalanceGains();
+    const dna = getThemeDNA(measure.preset || AppState.activePreset);
+    const rollStepSec = dna.chordRollSec || 0.016;
 
     // Optional soft wooden metronome (compound duple 0 & 1.5 in 6/8; integer beats in 3/4, 4/4, 5/4)
     const isMetronomePulse = measure.timeSig === '6/8'
@@ -55,6 +76,14 @@ function triggerMeasureBeatAudio(measure, subBeat, playSound = true, startTime =
         audioEngine.playMetronomeClick(subBeat < 0.01, startTime);
     }
 
+    // Resolve base AudioContext timestamp so multi-note chords can gently roll upward from bass to top
+    if (playSound && !audioEngine.isInitialized) {
+        audioEngine.init();
+    }
+    const baseTime = (startTime !== null && typeof startTime === 'number')
+        ? startTime
+        : (audioEngine.ctx ? audioEngine.ctx.currentTime : null);
+
     // Trigger Left Hand events starting at this subBeat (skipping tied continuations & muted hand)
     if (lhScale > 0.01) {
         for (let idx = 0; idx < measure.lhEvents.length; idx++) {
@@ -62,8 +91,12 @@ function triggerMeasureBeatAudio(measure, subBeat, playSound = true, startTime =
             if (!ev.isRest && !ev.isTiedFromPrev && Math.abs(ev.startBeat - subBeat) < 0.05) {
                 const durSec = getEffectiveTiedDurationBeats(measure.lhEvents, idx, measure, false) * beatDurationSec;
                 const lhVel = computeExpressiveVelocity(0.58, measure, subBeat, lhScale);
-                for (const midi of ev.notes) {
-                    if (playSound) audioEngine.playNote(midi, durSec, lhVel, startTime);
+                const sorted = ev.notes.length > 1 ? [...ev.notes].sort((a, b) => a - b) : ev.notes;
+                for (let nIdx = 0; nIdx < sorted.length; nIdx++) {
+                    const noteWhen = (baseTime !== null && sorted.length > 1)
+                        ? (baseTime + nIdx * rollStepSec)
+                        : startTime;
+                    if (playSound) audioEngine.playNote(sorted[nIdx], durSec, lhVel, noteWhen);
                 }
             }
         }
@@ -78,8 +111,12 @@ function triggerMeasureBeatAudio(measure, subBeat, playSound = true, startTime =
             if (!ev.isRest && !ev.isTiedFromPrev && Math.abs(ev.startBeat - subBeat) < 0.05) {
                 const durSec = getEffectiveTiedDurationBeats(measure.rhEvents, idx, measure, true) * beatDurationSec;
                 const rhVel = computeExpressiveVelocity(rhBase, measure, subBeat, rhScale);
-                for (const midi of ev.notes) {
-                    if (playSound) audioEngine.playNote(midi, durSec, rhVel, startTime);
+                const sorted = ev.notes.length > 1 ? [...ev.notes].sort((a, b) => a - b) : ev.notes;
+                for (let nIdx = 0; nIdx < sorted.length; nIdx++) {
+                    const noteWhen = (baseTime !== null && sorted.length > 1)
+                        ? (baseTime + nIdx * rollStepSec * 0.45)
+                        : startTime;
+                    if (playSound) audioEngine.playNote(sorted[nIdx], durSec, rhVel, noteWhen);
                 }
             }
         }
@@ -186,18 +223,19 @@ function pumpAudioScheduler() {
 
         const subBeat = AudioLookaheadScheduler.nextSubBeat;
         const noteTime = AudioLookaheadScheduler.nextNoteTime;
+        const effTempo = getEffectiveTempoForSubBeat(meas, subBeat);
 
         AudioLookaheadScheduler.anchors.push({
             measureIndex: meas.index,
             subBeat,
             audioTime: noteTime,
             beatsPerMeasure: meas.beatsPerMeasure,
-            tempo: AppState.tempo
+            tempo: effTempo
         });
 
         triggerMeasureBeatAudio(meas, subBeat, true, noteTime);
 
-        const halfBeatSec = 0.5 * (60 / AppState.tempo);
+        const halfBeatSec = 0.5 * (60 / effTempo);
         AudioLookaheadScheduler.nextNoteTime += halfBeatSec;
         AudioLookaheadScheduler.nextSubBeat += 0.5;
         if (AudioLookaheadScheduler.nextSubBeat >= meas.beatsPerMeasure - 0.01) {

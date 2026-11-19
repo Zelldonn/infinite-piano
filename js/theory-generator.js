@@ -1,5 +1,9 @@
 /***********************************************************************
- * 4. PROCEDURAL MUSIC THEORY & VOICE-LEADING GENERATOR
+ * 4. PROCEDURAL MUSIC THEORY, 32-BAR FORM & THEME-DNA COMPOSER
+ * Supports 6 idiomatic piano worlds (Gymnopédie, Voxel Ambient,
+ * Nordique & Brume, Licorice Néo, Hyrule & Fées, Solo Piano),
+ * 32-bar A -> A' -> B -> A'' macro-form, slash-chord inversions,
+ * borrowed harmonic colors, and melodic suspensions/appoggiaturas.
  ***********************************************************************/
 
 // Convert MIDI pitch to pitch class (0-11)
@@ -25,7 +29,21 @@ function getScalePitchClasses(rootKey, mode) {
     return intervals.map(semi => (keyInfo.rootPc + semi) % 12);
 }
 
-// 8-bar Period harmonic templates: 4-bar Antecedent ("question") + 4-bar Consequent ("answer" resolving to tonic)
+// Normalize a harmonic arc item (number or { deg, inv, borrowed }) into a structured chord spec
+function normalizeChordSpec(entry) {
+    if (typeof entry === 'number') {
+        return { deg: entry, inv: 'root', borrowed: null };
+    }
+    return {
+        deg: entry.deg ?? 0,
+        inv: entry.inv || 'root',
+        borrowed: entry.borrowed || null
+    };
+}
+
+// 8-bar Period harmonic templates per theme:
+// - antecedent + consequent for Sections A, A', A''
+// - bridgeAntecedent + bridgeConsequent for Section B (contrast & lift in 32-bar macro-form)
 const PHRASE_ARC_TEMPLATES = {
     gymnopedie: {
         antecedent: [
@@ -39,6 +57,14 @@ const PHRASE_ARC_TEMPLATES = {
             [3, 1, 4, 0],
             [0, 5, 4, 0],
             [3, 4, 0, 0]
+        ],
+        bridgeAntecedent: [
+            [5, 3, 1, 4],
+            [3, 2, 1, 4]
+        ],
+        bridgeConsequent: [
+            [3, { deg: 0, inv: 'first' }, 1, 0],
+            [5, 3, 4, 0]
         ]
     },
     minecraft: {
@@ -51,18 +77,94 @@ const PHRASE_ARC_TEMPLATES = {
             [3, 4, 5, 0],
             [0, 3, 1, 0],
             [5, 3, 4, 0]
+        ],
+        bridgeAntecedent: [
+            [3, 4, 5, 2],
+            [5, 3, 1, 4]
+        ],
+        bridgeConsequent: [
+            [3, 1, 4, 0],
+            [5, 3, 1, 0]
         ]
     },
     skyrim: {
         antecedent: [
-            [0, 6, 3, 4],
-            [0, 5, 2, 6],
-            [0, 3, 6, 4]
+            [0, { deg: 6, inv: 'pedal' }, { deg: 5, inv: 'pedal' }, 4],
+            [0, { deg: 3, inv: 'pedal' }, 6, 4],
+            [0, 6, 3, 4]
         ],
         consequent: [
-            [0, 6, 3, 0],
+            [0, { deg: 6, inv: 'pedal' }, 3, 0],
             [5, 6, 3, 0],
             [0, 3, 4, 0]
+        ],
+        bridgeAntecedent: [
+            [5, 6, 2, 3],
+            [2, 6, 5, 4]
+        ],
+        bridgeConsequent: [
+            [5, 6, 4, 0],
+            [3, 6, 5, 0]
+        ]
+    },
+    licorice: {
+        antecedent: [
+            [0, { deg: 4, inv: 'first' }, 5, 3],
+            [0, { deg: 4, inv: 'first' }, 5, { deg: 2, inv: 'first' }],
+            [5, 3, 0, 4]
+        ],
+        consequent: [
+            [3, { deg: 0, inv: 'first' }, 1, 0],
+            [3, { deg: 3, borrowed: 'iv6' }, 4, 0],
+            [5, 1, 4, 0]
+        ],
+        bridgeAntecedent: [
+            [5, { deg: 2, inv: 'first' }, 3, { deg: 0, inv: 'first' }],
+            [3, 4, 2, 5]
+        ],
+        bridgeConsequent: [
+            [1, { deg: 3, borrowed: 'iv6' }, 4, 0],
+            [3, { deg: 0, inv: 'first' }, 4, 0]
+        ]
+    },
+    zelda: {
+        antecedent: [
+            [0, { deg: 4, inv: 'first' }, 5, 3],
+            [3, { deg: 4, inv: 'pedal' }, 2, 5],
+            [0, 5, 3, 4]
+        ],
+        consequent: [
+            [3, { deg: 3, borrowed: 'iv6' }, 4, 0],
+            [5, 3, { deg: 3, borrowed: 'iv6' }, 0],
+            [1, 4, { deg: 3, borrowed: 'iv6' }, 0]
+        ],
+        bridgeAntecedent: [
+            [5, 2, 3, 4],
+            [3, 2, 5, 1]
+        ],
+        bridgeConsequent: [
+            [3, { deg: 5, borrowed: 'bVI' }, { deg: 6, borrowed: 'bVII' }, 0],
+            [1, { deg: 5, borrowed: 'bVI' }, { deg: 6, borrowed: 'bVII' }, 0]
+        ]
+    },
+    gonzales: {
+        antecedent: [
+            [0, { deg: 4, inv: 'first', borrowed: 'V7' }, 5, { deg: 4, borrowed: 'V7' }],
+            [0, { deg: 2, inv: 'first' }, 3, { deg: 4, borrowed: 'V7' }],
+            [0, { deg: 4, inv: 'first', borrowed: 'V7' }, 0, 3]
+        ],
+        consequent: [
+            [3, { deg: 0, inv: 'first' }, { deg: 4, borrowed: 'V7' }, 0],
+            [5, 3, { deg: 4, borrowed: 'V7' }, 0],
+            [1, { deg: 4, inv: 'first', borrowed: 'V7' }, { deg: 4, borrowed: 'V7' }, 0]
+        ],
+        bridgeAntecedent: [
+            [2, { deg: 6, inv: 'first' }, 5, 2],
+            [5, 2, 3, 6]
+        ],
+        bridgeConsequent: [
+            [3, 5, { deg: 4, borrowed: 'V7' }, 0],
+            [2, 3, { deg: 4, borrowed: 'V7' }, 0]
         ]
     },
     default: {
@@ -77,50 +179,129 @@ const PHRASE_ARC_TEMPLATES = {
             [1, 4, 5, 0],
             [5, 1, 4, 0],
             [3, 1, 4, 0]
+        ],
+        bridgeAntecedent: [
+            [5, 3, 1, 4]
+        ],
+        bridgeConsequent: [
+            [3, 1, 4, 0]
         ]
     }
 };
 
-// Ensure an 8-bar musical period plan exists for measureNumber
+// Ensure an 8-bar musical period plan exists within the 32-bar A -> A' -> B -> A'' macro-form
 function ensurePeriodPlan(measureNumber, preset) {
     const periodIdx = Math.floor(measureNumber / 8);
+    const macroChapterIdx = Math.floor(measureNumber / 32);
+    const macroSectionIdx = periodIdx % 4; // 0=A, 1=A', 2=B, 3=A''
+    const macroSection = MACRO_SECTION_LABELS[macroSectionIdx];
     const ps = AppState.phraseState;
+
     if (ps.periodIdx === periodIdx && ps.chordDegrees.length === 8) {
+        // Keep chordPlan synchronized if chordDegrees were overridden externally
+        if (
+            !ps.chordPlan ||
+            ps.chordPlan.length !== 8 ||
+            ps.chordDegrees.some((d, i) => ps.chordPlan[i].deg !== d)
+        ) {
+            ps.chordPlan = ps.chordDegrees.map(d => normalizeChordSpec(d));
+        }
+        ps.macroSection = macroSection;
         return ps;
     }
+
     const bank = PHRASE_ARC_TEMPLATES[preset] || PHRASE_ARC_TEMPLATES.default;
-    const prevAntecedent = ps.chordDegrees.slice(0, 4).join(',');
-    const antPool = bank.antecedent.filter(a => bank.antecedent.length === 1 || a.join(',') !== prevAntecedent);
+    const isBridge = (macroSectionIdx === 2);
+    const antBank = (isBridge && bank.bridgeAntecedent) ? bank.bridgeAntecedent : bank.antecedent;
+    const conBank = (isBridge && bank.bridgeConsequent) ? bank.bridgeConsequent : bank.consequent;
+
+    const prevAntSig = (ps.chordDegrees || []).slice(0, 4).join(',');
+    const antPool = antBank.filter(a => {
+        if (antBank.length === 1) return true;
+        return a.map(x => normalizeChordSpec(x).deg).join(',') !== prevAntSig;
+    });
     const ant = antPool[Math.floor(Math.random() * antPool.length)];
-    const con = bank.consequent[Math.floor(Math.random() * bank.consequent.length)];
+    const con = conBank[Math.floor(Math.random() * conBank.length)];
+    const plan = [...ant, ...con].map(normalizeChordSpec);
+
+    if (ps.macroChapterIdx !== macroChapterIdx) {
+        ps.macroChapterIdx = macroChapterIdx;
+        ps.sectionAMotif = [];
+    }
 
     ps.periodIdx = periodIdx;
-    ps.chordDegrees = [...ant, ...con];
+    ps.macroSection = macroSection;
+    ps.chordPlan = plan;
+    ps.chordDegrees = plan.map(item => item.deg);
     ps.motifEvents = [];
+    ps.pendingResolutionMidi = null;
     return ps;
 }
 
-// Phrase-structured harmonic selector: resolves each 8-bar period cleanly through antecedent & consequent arcs
-function chooseNextChordDegree(prevDegree, preset, mode, measureNumber) {
+// Phrase-structured harmonic selector: returns { deg, inv, borrowed } for measureNumber
+function chooseNextChordSpec(prevDegree, preset, mode, measureNumber) {
     const ps = ensurePeriodPlan(measureNumber, preset);
-    return ps.chordDegrees[measureNumber % 8];
+    return ps.chordPlan[measureNumber % 8];
 }
 
-// Build chord structure (root, 3rd, 5th, 7th, 9th, chord symbol, Roman numeral, guide tones)
-function buildContemplativeChord(rootKey, mode, degree, richness, preset) {
+// Backward-compatible wrapper returning numeric scale degree
+function chooseNextChordDegree(prevDegree, preset, mode, measureNumber) {
+    return chooseNextChordSpec(prevDegree, preset, mode, measureNumber).deg;
+}
+
+// Build chord structure (root, bassPc/inversion, 3rd, 5th, 7th, 9th, symbol, Roman numeral, guide tones)
+function buildContemplativeChord(rootKey, mode, degree, richness, preset, spec = null) {
     const sigInfo = getModalSignatureInfo(rootKey, mode);
     const scalePcs = getScalePitchClasses(rootKey, mode);
+    const tonicPc = scalePcs[0];
+    const requestedBorrowed = spec && spec.borrowed ? spec.borrowed : null;
+    const requestedInv = spec && spec.inv ? spec.inv : 'root';
 
-    const rootPc = scalePcs[degree % 7];
+    let rootPc = scalePcs[degree % 7];
     let thirdPc = scalePcs[(degree + 2) % 7];
-    const fifthPc = scalePcs[(degree + 4) % 7];
+    let fifthPc = scalePcs[(degree + 4) % 7];
     let seventhPc = scalePcs[(degree + 6) % 7];
-    const ninthPc = scalePcs[(degree + 1) % 7];
+    let ninthPc = scalePcs[(degree + 1) % 7];
 
-    // Handle modal borrowed chord (e.g. minor iv6 in Major or V7/V in Major/Modal) when richness === 'borrowed'
+    // Handle modal interchange / borrowed colors (explicit from Theme DNA or probabilistic when richness === 'borrowed')
     let isBorrowedMinorIv = false;
     let isSecondaryDom = false;
-    if (richness === 'borrowed') {
+    let isHarmonicMinorV7 = false;
+    let isBorrowedFlatVI = false;
+    let isBorrowedFlatVII = false;
+
+    const allowBorrowedColor = (richness === 'borrowed' || richness === 'extensions');
+
+    if (requestedBorrowed === 'iv6' && mode === 'major' && allowBorrowedColor) {
+        rootPc = scalePcs[3];
+        thirdPc = (rootPc + 3) % 12;
+        fifthPc = (rootPc + 7) % 12;
+        seventhPc = (rootPc + 9) % 12; // Major 6th (e.g. D in Fm6 / A in Cm6)
+        isBorrowedMinorIv = true;
+    } else if (requestedBorrowed === 'bVI' && (mode === 'major' || mode === 'lydian' || mode === 'mixolydian') && allowBorrowedColor) {
+        // Heroic Zelda/cinematic flat-VI major7 (e.g. Ebmaj7 in G major)
+        rootPc = (tonicPc + 8) % 12;
+        thirdPc = (rootPc + 4) % 12;
+        fifthPc = (rootPc + 7) % 12;
+        seventhPc = (rootPc + 11) % 12;
+        ninthPc = (rootPc + 2) % 12;
+        isBorrowedFlatVI = true;
+    } else if (requestedBorrowed === 'bVII' && (mode === 'major' || mode === 'lydian') && allowBorrowedColor) {
+        // Heroic Zelda/cinematic flat-VII major (e.g. Fmaj7 in G major)
+        rootPc = (tonicPc + 10) % 12;
+        thirdPc = (rootPc + 4) % 12;
+        fifthPc = (rootPc + 7) % 12;
+        seventhPc = (rootPc + 11) % 12;
+        ninthPc = (rootPc + 2) % 12;
+        isBorrowedFlatVII = true;
+    } else if (requestedBorrowed === 'V7' && (mode === 'aeolian' || mode === 'dorian') && richness !== 'triads') {
+        // Authentic harmonic-minor V7 (raised leading tone, signature Chilly Gonzales cadence!)
+        rootPc = scalePcs[4];
+        thirdPc = (rootPc + 4) % 12;
+        fifthPc = (rootPc + 7) % 12;
+        seventhPc = (rootPc + 10) % 12;
+        isHarmonicMinorV7 = true;
+    } else if (richness === 'borrowed' && !requestedBorrowed) {
         if (mode === 'major' && degree === 3 && Math.random() < 0.45) {
             // Borrow minor iv6 (flatten the 3rd of IV and add major 6th = D natural in C major)
             thirdPc = (rootPc + 3) % 12;
@@ -133,6 +314,8 @@ function buildContemplativeChord(rootKey, mode, degree, richness, preset) {
             isSecondaryDom = true;
         }
     }
+
+    const isBorrowed = isBorrowedMinorIv || isSecondaryDom || isHarmonicMinorV7 || isBorrowedFlatVI || isBorrowedFlatVII;
 
     // Compute intervals relative to chord root
     const thirdInterval = (thirdPc - rootPc + 12) % 12; // 3 = minor, 4 = major
@@ -149,7 +332,8 @@ function buildContemplativeChord(rootKey, mode, degree, richness, preset) {
     if (isMinor || isDim) romanBase = romanBase.toLowerCase();
     if (isDim) romanBase += '°';
 
-    const rootName = formatPitchClass(rootPc, sigInfo.useFlats, 'en', sigInfo.flats);
+    const rootUseFlats = (isBorrowedFlatVI || isBorrowedFlatVII || isBorrowedMinorIv) ? true : sigInfo.useFlats;
+    const rootName = formatPitchClass(rootPc, rootUseFlats, 'en', sigInfo.flats);
     let suffix = isMinor ? 'm' : (isDim ? 'dim' : '');
     let romanSuffix = '';
 
@@ -177,12 +361,11 @@ function buildContemplativeChord(rootKey, mode, degree, richness, preset) {
         }
     }
 
-    if ((richness === 'extensions' || (richness === 'borrowed' && !isDim)) && !isBorrowedMinorIv && !isSecondaryDom) {
-        // Add lush 9ths, add9, or sus2 for Minecraft / Gymnopédie / Licorice
+    if ((richness === 'extensions' || (richness === 'borrowed' && !isDim)) && !isBorrowedMinorIv && !isSecondaryDom && !isHarmonicMinorV7) {
+        // Add lush 9ths, add9, or sus2 for Minecraft / Gymnopédie / Licorice / Zelda
         const ninthInterval = (ninthPc - rootPc + 12) % 12;
         if (ninthInterval === 2) {
-            if (preset === 'minecraft' && Math.random() < 0.45 && !isMinor) {
-                // Replace or augment with add9 / sus2
+            if ((preset === 'minecraft' || preset === 'zelda') && Math.random() < 0.45 && !isMinor) {
                 chordPcs.push(ninthPc);
                 hasNinth = true;
                 suffix = isMaj7 ? 'maj9' : 'add9';
@@ -206,52 +389,100 @@ function buildContemplativeChord(rootKey, mode, degree, richness, preset) {
 
     if (isBorrowedMinorIv) {
         suffix = 'm6';
+        romanBase = 'iv';
         romanSuffix = '6 (emp.)';
+    } else if (isBorrowedFlatVI) {
+        romanBase = '♭VI';
+        romanSuffix = hasSeventh ? 'Δ7' : '';
+    } else if (isBorrowedFlatVII) {
+        romanBase = '♭VII';
+        romanSuffix = hasSeventh ? 'Δ7' : '';
+    } else if (isHarmonicMinorV7) {
+        suffix = '7';
+        romanBase = 'V';
+        romanSuffix = '7';
     } else if (isSecondaryDom) {
         suffix = '7';
         romanBase = 'V/V';
         romanSuffix = '';
     }
 
+    // Resolve slash-chord bass pitch class for 1st inversions (walking bass) or tonic pedal drones
+    let bassPc = rootPc;
+    let inversion = 'root';
+    let slashSuffix = '';
+    let invRomanTag = '';
+
+    if (requestedInv === 'first' && thirdPc !== rootPc) {
+        bassPc = thirdPc;
+        inversion = 'first';
+        const bassName = formatPitchClass(bassPc, rootUseFlats, 'en', sigInfo.flats);
+        slashSuffix = `/${bassName}`;
+        invRomanTag = hasSeventh ? '⁶₅' : '⁶';
+    } else if (requestedInv === 'pedal' && tonicPc !== rootPc) {
+        bassPc = tonicPc;
+        inversion = 'pedal';
+        const pedalName = formatPitchClass(bassPc, sigInfo.useFlats, 'en', sigInfo.flats);
+        slashSuffix = `/${pedalName}`;
+        invRomanTag = '/I';
+    }
+
     return {
         degree,
         rootPc,
+        bassPc,
+        inversion,
         thirdPc,
         fifthPc,
         seventhPc: hasSeventh ? seventhPc : null,
         ninthPc: hasNinth ? ninthPc : null,
         hasSeventh,
         hasNinth,
+        isBorrowed,
         chordPcs,
         guideTonePcs,
-        preferFlats: isBorrowedMinorIv,
-        preferSharps: isSecondaryDom && sigInfo.flats === 0,
-        symbol: `${rootName}${suffix}`,
-        roman: `${romanBase}${romanSuffix}`
+        preferFlats: isBorrowedMinorIv || isBorrowedFlatVI || isBorrowedFlatVII,
+        preferSharps: (isSecondaryDom || (isHarmonicMinorV7 && sigInfo.flats === 0)) && sigInfo.flats === 0,
+        symbol: `${rootName}${suffix}${slashSuffix}`,
+        roman: `${romanBase}${romanSuffix}${invRomanTag}`
     };
 }
 
 // Parsimonious voice-leading helper: minimizes semitone movement from prevVoicingMidis across C3–G4
+// Honors inverted/pedal chord.bassPc for smooth stepwise basslines and tonic drones
 function buildSmoothLeftHandVoicing(chord, prevVoicingMidis) {
-    // Pick warm bass root in [36..50] closest to previous bass note (default around D2..C3)
+    const bassPc = chord.bassPc !== undefined ? chord.bassPc : chord.rootPc;
     const prevBass = (prevVoicingMidis && prevVoicingMidis.length > 0) ? prevVoicingMidis[0] : 43;
     const bassCandidates = [];
     for (const octBase of [36, 48]) {
-        const m = octBase + chord.rootPc;
-        if (m >= 36 && m <= 50) bassCandidates.push(m);
+        const m = octBase + bassPc;
+        if (m >= 36 && m <= 52) bassCandidates.push(m);
     }
-    if (bassCandidates.length === 0) bassCandidates.push(36 + chord.rootPc);
+    if (bassCandidates.length === 0) bassCandidates.push(36 + bassPc);
     bassCandidates.sort((a, b) => Math.abs(a - prevBass) - Math.abs(b - prevBass));
     const bassMidi = bassCandidates[0];
 
     // Select 3 upper chord-tone pitch classes strictly respecting chord richness (triads vs 7ths vs 9ths)
-    const targetPcs = chord.hasSeventh
-        ? [
+    // For 1st-inversion chords (3rd in bass), include the chord root clearly in the upper voices
+    let targetPcs;
+    if (!chord.hasSeventh) {
+        targetPcs = chord.inversion === 'first'
+            ? [chord.rootPc, chord.fifthPc, chord.thirdPc]
+            : [chord.thirdPc, chord.fifthPc, chord.rootPc];
+    } else if (chord.inversion === 'first') {
+        targetPcs = [
+            chord.rootPc,
+            chord.seventhPc !== null && chord.seventhPc !== undefined ? chord.seventhPc : chord.fifthPc,
+            chord.fifthPc
+        ];
+    } else {
+        targetPcs = [
             chord.thirdPc,
             chord.seventhPc !== null && chord.seventhPc !== undefined ? chord.seventhPc : chord.fifthPc,
             chord.hasNinth && chord.ninthPc !== null && chord.ninthPc !== undefined ? chord.ninthPc : chord.fifthPc
-        ]
-        : [chord.thirdPc, chord.fifthPc, chord.rootPc];
+        ];
+    }
+
     const uniquePcs = [...new Set(targetPcs)];
     while (uniquePcs.length < 3) {
         uniquePcs.push(chord.rootPc);
@@ -329,10 +560,27 @@ function getBeatsPerMeasure(timeSig) {
     switch (timeSig) {
         case '3/4': return 3;
         case '4/4': return 4;
-        case '6/8': return 3; // Represented as 3 dotted-quarter beats (6 eighth subdivisions)
+        case '6/8': return 3; // Represented as 3 quarter-unit beats (2 compound dotted-quarter pulses)
         case '5/4': return 5;
         default: return 4;
     }
+}
+
+// Adapt the active Treble scale pool cleanly during borrowed chords (e.g. harmonic minor B♮ on G7, Ab on Fm6, Eb/F/Bb on bVI/bVII)
+function buildChordAdaptedScalePcs(baseScalePcs, chord) {
+    if (!chord || !chord.isBorrowed) return baseScalePcs;
+    const adapted = [...baseScalePcs];
+    for (const cPc of chord.chordPcs) {
+        if (adapted.includes(cPc)) continue;
+        // Replace whichever scale tone sits 1 semitone away from this borrowed chord tone to avoid harsh minor-2nd clashes
+        const clashIdx = adapted.findIndex(s => ((s - cPc + 12) % 12) === 1 || ((cPc - s + 12) % 12) === 1);
+        if (clashIdx !== -1) {
+            adapted[clashIdx] = cPc;
+        } else {
+            adapted.push(cPc);
+        }
+    }
+    return [...new Set(adapted)];
 }
 
 // Generate a single measure of both Left Hand (Bass Clef) and Right Hand (Treble Clef) events
@@ -355,14 +603,29 @@ function generateNextMeasure() {
     const isSixEight = (timeSig === '6/8');
     const beatsPerMeasure = getBeatsPerMeasure(timeSig);
     const richness = AppState.harmonicRichness;
-    const lhPattern = AppState.leftHandPattern;
+    const activePreset = AppState.activePreset;
+    const dna = getThemeDNA(activePreset);
+    const presetDefaults = activePreset ? STYLE_PRESETS[activePreset] : null;
     const rhDensity = Number(AppState.rightHandDensity);
 
     const periodIndex = Math.floor(measureIndex / 8);
     const barInPeriod = measureIndex % 8;
+    const macroSectionIdx = periodIndex % 4; // 0=A, 1=A', 2=B (Bridge), 3=A'' (Return)
+    const macroSection = MACRO_SECTION_LABELS[macroSectionIdx];
     const isHalfCadenceBar = (barInPeriod === 3);
     const isFullCadenceBar = (barInPeriod === 7);
     const isCadenceBar = isHalfCadenceBar || isFullCadenceBar;
+
+    // Evolve LH texture gently during Section B (Bridge) when using the preset's default LH pattern
+    let lhPattern = AppState.leftHandPattern;
+    if (
+        macroSectionIdx === 2 &&
+        presetDefaults &&
+        lhPattern === presetDefaults.leftHandPattern &&
+        dna.bridgeLhPattern
+    ) {
+        lhPattern = dna.bridgeLhPattern;
+    }
 
     const pedFlags = computePedagogyFlagsForMeasureIndex(measureIndex);
     const nextPedFlags = computePedagogyFlagsForMeasureIndex(measureIndex + 1);
@@ -387,19 +650,24 @@ function generateNextMeasure() {
         !nextWillModulate
     );
 
-    // Select next chord degree from the active 8-bar period arc (call on measure 0 too so periodIdx initializes cleanly)
-    const periodDegree = chooseNextChordDegree(AppState.lastChordDegree, AppState.activePreset, mode, measureIndex);
-    const nextDegree = measureIndex === 0 ? 0 : periodDegree;
+    // Select next chord spec from the active 32-bar / 8-bar period arc
+    const chordSpec = chooseNextChordSpec(AppState.lastChordDegree, activePreset, mode, measureIndex);
+    const nextDegree = measureIndex === 0 ? 0 : chordSpec.deg;
+    const effectiveSpec = measureIndex === 0 ? { deg: 0, inv: 'root', borrowed: null } : chordSpec;
     AppState.lastChordDegree = nextDegree;
 
-    const chord = buildContemplativeChord(rootKey, mode, nextDegree, richness, AppState.activePreset);
+    const chord = buildContemplativeChord(rootKey, mode, nextDegree, richness, activePreset, effectiveSpec);
     const voicing = buildSmoothLeftHandVoicing(chord, AppState.lastVoicingMidis);
     AppState.lastVoicingMidis = [voicing.bassMidi, ...voicing.upperMidis];
 
-    // Authentic diatonic fifth interval (+7 for major/minor, +6 for diminished chords)
-    const fifthInterval = (chord.fifthPc - chord.rootPc + 12) % 12;
+    // Authentic chord-tone companion pitches above bassMidi (respects diminished 5ths & 1st inversions!)
+    const fifthInterval = chord.inversion === 'first'
+        ? ((chord.rootPc - chord.bassPc + 12) % 12) || 7
+        : ((chord.fifthPc - chord.rootPc + 12) % 12);
     const diatonicFifthMidi = voicing.bassMidi + fifthInterval;
     const octaveMidi = voicing.bassMidi + 12;
+    const ninthMidi = voicing.bassMidi + 14;
+    const tenthMidi = voicing.upperMidis[0] > octaveMidi ? voicing.upperMidis[0] : (voicing.upperMidis[0] + 12);
 
     const lhEvents = [];
     const rhEvents = [];
@@ -411,7 +679,6 @@ function generateNextMeasure() {
             lhEvents.push({ startBeat: 0, durationBeats: 1.5, notes: [voicing.bassMidi], isRest: false });
             lhEvents.push({ startBeat: 1.5, durationBeats: 1.5, notes: voicing.upperMidis, isRest: false });
         } else if (lhPattern === 'arpeggio_slow') {
-            // Flowing Barcarolle compound lilt: quarter + eighth | quarter + eighth
             lhEvents.push({ startBeat: 0, durationBeats: 1, notes: [voicing.bassMidi], isRest: false });
             lhEvents.push({ startBeat: 1, durationBeats: 0.5, notes: [diatonicFifthMidi], isRest: false });
             lhEvents.push({ startBeat: 1.5, durationBeats: 1, notes: [octaveMidi], isRest: false });
@@ -424,13 +691,17 @@ function generateNextMeasure() {
         } else if (lhPattern === 'ostinato_eighths') {
             const top1 = voicing.upperMidis[0];
             const top2 = voicing.upperMidis[1];
-            const pattern6 = [voicing.bassMidi, diatonicFifthMidi, top1, top2, diatonicFifthMidi, top1];
+            const pattern6 = dna.fairyWaveLh
+                ? [voicing.bassMidi, diatonicFifthMidi, octaveMidi, top1, octaveMidi, diatonicFifthMidi]
+                : (dna.baroqueBassLh
+                    ? [voicing.bassMidi, top1, top2, top1, voicing.bassMidi, top2]
+                    : [voicing.bassMidi, diatonicFifthMidi, top1, top2, diatonicFifthMidi, top1]);
             for (let e = 0; e < 6; e++) {
                 lhEvents.push({ startBeat: e * 0.5, durationBeats: 0.5, notes: [pattern6[e]], isRest: false });
             }
         }
     } else if (lhPattern === 'satie') {
-        // Beat 0: Low Bass Root, Beat 1 (& 2): Warm middle-register chord voicing
+        // Beat 0: Low Bass Root/Inversion, Beat 1 (& 2): Warm middle-register chord voicing
         lhEvents.push({
             startBeat: 0,
             durationBeats: 1,
@@ -459,19 +730,26 @@ function generateNextMeasure() {
             });
         }
     } else if (lhPattern === 'arpeggio_slow') {
-        // Gentle quarter-note broken arpeggio (1 - 5 - 8 - 10)
-        const tenthMidi = voicing.upperMidis[0] > octaveMidi ? voicing.upperMidis[0] : voicing.upperMidis[0] + 12;
-        const arpPool = [voicing.bassMidi, diatonicFifthMidi, octaveMidi, tenthMidi, diatonicFifthMidi];
-        for (let b = 0; b < beatsPerMeasure; b++) {
-            lhEvents.push({
-                startBeat: b,
-                durationBeats: 1,
-                notes: [arpPool[b % arpPool.length]],
-                isRest: false
-            });
+        if (dna.openTenthLh && beatsPerMeasure === 4) {
+            // Voxel Ambient / C418 signature: wide open 10th spread with warm ringing half-note breath
+            const safeTenth = Math.min(64, tenthMidi);
+            lhEvents.push({ startBeat: 0, durationBeats: 1, notes: [voicing.bassMidi], isRest: false });
+            lhEvents.push({ startBeat: 1, durationBeats: 1, notes: [diatonicFifthMidi], isRest: false });
+            lhEvents.push({ startBeat: 2, durationBeats: 2, notes: [safeTenth], isRest: false });
+        } else {
+            // Gentle quarter-note broken arpeggio (1 - 5 - 8 - 10)
+            const arpPool = [voicing.bassMidi, diatonicFifthMidi, octaveMidi, Math.min(66, tenthMidi), diatonicFifthMidi];
+            for (let b = 0; b < beatsPerMeasure; b++) {
+                lhEvents.push({
+                    startBeat: b,
+                    durationBeats: 1,
+                    notes: [arpPool[b % arpPool.length]],
+                    isRest: false
+                });
+            }
         }
     } else if (lhPattern === 'nordic_fifths') {
-        // Resonant open fifths and octaves (Skyrim style)
+        // Resonant open fifths and octaves (Skyrim style, supports tonic pedal drones cleanly)
         if (beatsPerMeasure >= 4) {
             lhEvents.push({
                 startBeat: 0,
@@ -526,10 +804,21 @@ function generateNextMeasure() {
             });
         }
     } else if (lhPattern === 'ostinato_eighths') {
-        // Continuous eighth-note broken chords (Licorice / Neo-classical style)
         const top1 = voicing.upperMidis[0];
         const top2 = voicing.upperMidis[1];
-        const pattern = [voicing.bassMidi, diatonicFifthMidi, top1, diatonicFifthMidi, top2, diatonicFifthMidi, top1, diatonicFifthMidi];
+        const top3 = voicing.upperMidis[2];
+        let pattern;
+        if (dna.fairyWaveLh) {
+            // Zelda / Fairy Fountain shimmering ascending-descending broken harp wave
+            const wavePeak = chord.hasNinth ? Math.min(67, ninthMidi) : Math.min(67, tenthMidi);
+            pattern = [voicing.bassMidi, diatonicFifthMidi, octaveMidi, wavePeak, octaveMidi, diatonicFifthMidi, top1, diatonicFifthMidi];
+        } else if (dna.baroqueBassLh) {
+            // Chilly Gonzales Solo Piano: intimate crisp neo-baroque Alberti/walking figure
+            pattern = [voicing.bassMidi, top1, top2, top1, voicing.bassMidi, top2, top3, top2];
+        } else {
+            // Licorice / Neo-classical continuous eighth-note broken chords
+            pattern = [voicing.bassMidi, diatonicFifthMidi, top1, diatonicFifthMidi, top2, diatonicFifthMidi, top1, diatonicFifthMidi];
+        }
         const totalEighths = beatsPerMeasure * 2;
         for (let e = 0; e < totalEighths; e++) {
             lhEvents.push({
@@ -542,7 +831,8 @@ function generateNextMeasure() {
     }
 
     // ==================== 2. RIGHT HAND (TREBLE CLEF) GENERATION ====================
-    const scalePcs = getScalePitchClasses(rootKey, mode);
+    const baseScalePcs = getScalePitchClasses(rootKey, mode);
+    const scalePcs = buildChordAdaptedScalePcs(baseScalePcs, chord);
     const minMidi = AppState.allowLedgerLines ? 60 : 64; // C4 or E4
     const maxMidi = AppState.allowLedgerLines ? 84 : 77; // C6 or F5
 
@@ -554,9 +844,11 @@ function generateNextMeasure() {
         }
     }
 
-    // 8-bar period melodic arch: gently opens -> rises in bar 2 -> relaxes at half-cadence bar 3 -> peaks in bar 5 -> resolves home in bar 7
+    // 8-bar period melodic arch + 32-bar macro-form lift (A: calm, A': +8%, B: +14% peak, A'': warm settle)
     const PHRASE_CONTOUR_RATIO = [0.42, 0.50, 0.58, 0.48, 0.62, 0.78, 0.64, 0.36];
-    const phraseTargetMidi = scaleMidis[Math.min(scaleMidis.length - 1, Math.max(0, Math.round((scaleMidis.length - 1) * PHRASE_CONTOUR_RATIO[barInPeriod])))];
+    const MACRO_CONTOUR_SHIFT = [0.0, 0.08, 0.14, -0.02];
+    const targetRatio = Math.max(0.18, Math.min(0.92, PHRASE_CONTOUR_RATIO[barInPeriod] + MACRO_CONTOUR_SHIFT[macroSectionIdx]));
+    const phraseTargetMidi = scaleMidis[Math.min(scaleMidis.length - 1, Math.max(0, Math.round((scaleMidis.length - 1) * targetRatio)))];
 
     const findClosestScaleIdx = (midi) => {
         let bestIdx = 0;
@@ -568,12 +860,79 @@ function generateNextMeasure() {
         return bestIdx;
     };
 
-    // Helper to pick next lyrical melody note guided by phrase contour & conjunct motion
-    const pickNextMelodyNote = (preferChordTone = false, preferTonicResolution = false) => {
+    const ps = AppState.phraseState;
+
+    // Pick next lyrical melody note guided by phrase contour, heroic leaps, and expressive suspensions/appoggiaturas
+    const pickNextMelodyNote = (preferChordTone = false, preferTonicResolution = false, allowSuspension = false) => {
+        // 1. Honor any pending appoggiatura/suspension resolution first (authentic tension -> release!)
+        if (ps.pendingResolutionMidi !== null && !preferTonicResolution) {
+            const resIdx = findClosestScaleIdx(ps.pendingResolutionMidi);
+            const resMidi = scaleMidis[resIdx];
+            ps.pendingResolutionMidi = null;
+            AppState.lastMelodyMidi = resMidi;
+            return resMidi;
+        }
+        if (preferTonicResolution) {
+            ps.pendingResolutionMidi = null;
+        }
+
         let maxSemis = 5;
         if (AppState.intervalLeap === 'stepwise') maxSemis = 4;
         if (AppState.intervalLeap === 'moderate') maxSemis = 7;
         if (AppState.intervalLeap === 'wide') maxSemis = 12;
+
+        // Theme-authentic heroic upward leap (Skyrim / Zelda folk-heroic arch on phrase openings)
+        const triggerHeroicLeap = (
+            preferChordTone &&
+            !preferTonicResolution &&
+            (barInPeriod === 0 || barInPeriod === 4 || barInPeriod === 5) &&
+            Math.random() < dna.heroicLeapChance
+        );
+        if (triggerHeroicLeap) {
+            const leapCandidates = scaleMidis.filter(m =>
+                m - AppState.lastMelodyMidi >= 5 &&
+                m - AppState.lastMelodyMidi <= 9 &&
+                chord.chordPcs.includes(midiToPc(m))
+            );
+            if (leapCandidates.length > 0) {
+                const chosenLeap = leapCandidates[Math.floor(Math.random() * leapCandidates.length)];
+                AppState.lastMelodyMidi = chosenLeap;
+                return chosenLeap;
+            }
+        }
+
+        // Theme-authentic expressive appoggiatura / suspension (4->3, 9->1, or Lydian #4->5)
+        if (allowSuspension && !preferTonicResolution && !isFullCadenceBar && Math.random() < dna.suspensionChance) {
+            const suspCandidates = [];
+            for (let k = 1; k < scaleMidis.length - 1; k++) {
+                const m = scaleMidis[k];
+                if (Math.abs(m - AppState.lastMelodyMidi) > maxSemis) continue;
+                const pc = midiToPc(m);
+                const lowerChordTone = scaleMidis[k - 1];
+                const upperChordTone = scaleMidis[k + 1];
+                // Non-chord tone sitting 1 scale step above chord 3rd or root -> resolves down!
+                if (
+                    !chord.chordPcs.includes(pc) &&
+                    (midiToPc(lowerChordTone) === chord.thirdPc || midiToPc(lowerChordTone) === chord.rootPc)
+                ) {
+                    suspCandidates.push({ suspMidi: m, targetMidi: lowerChordTone });
+                } else if (
+                    mode === 'lydian' &&
+                    ((pc - chord.rootPc + 12) % 12) === 6 &&
+                    midiToPc(upperChordTone) === chord.fifthPc
+                ) {
+                    // Lydian #4 resolving gracefully UP to the 5th
+                    suspCandidates.push({ suspMidi: m, targetMidi: upperChordTone });
+                }
+            }
+            if (suspCandidates.length > 0) {
+                suspCandidates.sort((a, b) => Math.abs(a.suspMidi - phraseTargetMidi) - Math.abs(b.suspMidi - phraseTargetMidi));
+                const pick = suspCandidates[0];
+                ps.pendingResolutionMidi = pick.targetMidi;
+                AppState.lastMelodyMidi = pick.suspMidi;
+                return pick.suspMidi;
+            }
+        }
 
         let candidates = scaleMidis.filter(m => Math.abs(m - AppState.lastMelodyMidi) <= maxSemis);
         if (candidates.length === 0) candidates = scaleMidis;
@@ -595,7 +954,9 @@ function generateNextMeasure() {
             const contourPull = -Math.abs(m - phraseTargetMidi) * 0.45;
             const conjunctBonus = (stepDist >= 1 && stepDist <= 4) ? 3.2 : 0;
             const repeatPenalty = (m === AppState.lastMelodyMidi) ? -2.6 : 0;
-            const score = contourPull + conjunctBonus + repeatPenalty + Math.random() * 2.2;
+            // Satie / Zelda love luminous guide tones (7th/9th/3rd) on strong beats
+            const colorBonus = (preferChordTone && chord.guideTonePcs.has(midiToPc(m))) ? 0.9 : 0;
+            const score = contourPull + conjunctBonus + repeatPenalty + colorBonus + Math.random() * 2.1;
             if (score > bestScore) {
                 bestScore = score;
                 bestNote = m;
@@ -606,9 +967,11 @@ function generateNextMeasure() {
         return bestNote;
     };
 
-    const buildRhNoteArray = (mainNote) => {
+    const buildRhNoteArray = (mainNote, isStrongBeat = false) => {
         const notes = [mainNote];
-        if (rhDensity === 4 && Math.random() < 0.72) {
+        // Section A' gently blossoms with tender 3rd/6th dyads on strong beats even when base density < 4
+        const blossomHarmony = (macroSectionIdx === 1 && isStrongBeat && rhDensity >= 2 && Math.random() < 0.34);
+        if ((rhDensity === 4 && Math.random() < 0.72) || blossomHarmony) {
             const idxInScale = scaleMidis.indexOf(mainNote);
             const harmonyOffset = Math.random() < 0.7 ? 2 : 5;
             if (idxInScale - harmonyOffset >= 0) {
@@ -618,18 +981,8 @@ function generateNextMeasure() {
         return notes;
     };
 
-    // Attempt transposed call-and-response / sequence replay of Bar 0 motif on Bar 2 and Bar 4
-    const ps = AppState.phraseState;
-    let usedMotifRecall = false;
-    if (
-        (barInPeriod === 2 || barInPeriod === 4) &&
-        !incomingTieNotes &&
-        ps.motifEvents.length > 0 &&
-        ps.motifTimeSig === timeSig
-    ) {
-        const approxAnchorTarget = barInPeriod === 2
-            ? (ps.motifAnchorMidi + (Math.random() < 0.75 ? 3 : -2))
-            : phraseTargetMidi;
+    // Helper to replay a captured motif template transposed onto the current harmony
+    const populateFromMotifTemplate = (templateEvents, approxAnchorTarget, allowBlossom = false) => {
         const chordToneMidis = scaleMidis.filter(m => chord.chordPcs.includes(midiToPc(m)));
         let startNote = scaleMidis[findClosestScaleIdx(approxAnchorTarget)];
         if (chordToneMidis.length > 0) {
@@ -640,10 +993,10 @@ function generateNextMeasure() {
             }
         }
         const anchorIdx = findClosestScaleIdx(startNote);
-        const lastNoteSlotIdx = ps.motifEvents.reduce((acc, ev, idx) => (ev.isRest ? acc : idx), -1);
+        const lastNoteSlotIdx = templateEvents.reduce((acc, ev, idx) => (ev.isRest ? acc : idx), -1);
 
-        for (let idx = 0; idx < ps.motifEvents.length; idx++) {
-            const mEv = ps.motifEvents[idx];
+        for (let idx = 0; idx < templateEvents.length; idx++) {
+            const mEv = templateEvents[idx];
             if (mEv.isRest) {
                 rhEvents.push({
                     startBeat: mEv.startBeat,
@@ -662,13 +1015,56 @@ function generateNextMeasure() {
             }
             const noteMidi = scaleMidis[noteIdx];
             AppState.lastMelodyMidi = noteMidi;
+            const wantChord = mEv.wasChordal || (allowBlossom && idx === 0);
             rhEvents.push({
                 startBeat: mEv.startBeat,
                 durationBeats: mEv.durationBeats,
-                notes: mEv.wasChordal ? buildRhNoteArray(noteMidi) : [noteMidi],
+                notes: wantChord ? buildRhNoteArray(noteMidi, idx === 0) : [noteMidi],
                 isRest: false
             });
         }
+        ps.pendingResolutionMidi = null;
+    };
+
+    // 1) Macro-form Section A' (bar 8) and A'' (bar 24) recall Section A's opening motif!
+    let usedMotifRecall = false;
+    if (
+        barInPeriod === 0 &&
+        (macroSectionIdx === 1 || macroSectionIdx === 3) &&
+        !incomingTieNotes &&
+        ps.sectionAMotif.length > 0 &&
+        ps.sectionAMotifTimeSig === timeSig
+    ) {
+        const targetAnchor = macroSectionIdx === 1
+            ? Math.min(maxMidi - 2, ps.sectionAAnchorMidi + 4) // A' rises gently
+            : ps.sectionAAnchorMidi;                           // A'' returns warmly home
+        populateFromMotifTemplate(ps.sectionAMotif, targetAnchor, macroSectionIdx === 1);
+        usedMotifRecall = true;
+    }
+
+    // 2) Within every 8-bar period, Bars 2 & 4 perform call-and-response / sequence replay of Bar 0's motif
+    if (
+        !usedMotifRecall &&
+        (barInPeriod === 2 || barInPeriod === 4) &&
+        !incomingTieNotes &&
+        ps.motifEvents.length > 0 &&
+        ps.motifTimeSig === timeSig
+    ) {
+        let approxAnchorTarget = barInPeriod === 2
+            ? (ps.motifAnchorMidi + (Math.random() < 0.75 ? 3 : -2))
+            : phraseTargetMidi;
+
+        // Crystalline octave-up echo on phrase answers for Voxel Ambient (Minecraft) & Hyrule (Zelda)
+        if (
+            barInPeriod === 2 &&
+            AppState.allowLedgerLines &&
+            Math.random() < dna.highEchoChance &&
+            ps.motifAnchorMidi + 10 <= maxMidi
+        ) {
+            approxAnchorTarget = Math.min(maxMidi - 2, ps.motifAnchorMidi + 12);
+        }
+
+        populateFromMotifTemplate(ps.motifEvents, approxAnchorTarget, macroSectionIdx === 1);
         usedMotifRecall = true;
     }
 
@@ -677,7 +1073,7 @@ function generateNextMeasure() {
     } else if (isSixEight) {
         // Compound 6/8 melody shaped in two 1.5-beat compound pulses
         if ((rhDensity === 1 || isFullCadenceBar) && !incomingTieNotes && Math.random() < (isFullCadenceBar ? 0.65 : 0.45)) {
-            const mainNote = pickNextMelodyNote(true, isFullCadenceBar);
+            const mainNote = pickNextMelodyNote(true, isFullCadenceBar, false);
             rhEvents.push({
                 startBeat: 0,
                 durationBeats: 3,
@@ -699,16 +1095,15 @@ function generateNextMeasure() {
                     continue;
                 }
 
-                // Breathing rest on final pulse of cadence bars or quiet Minecraft measures
-                if (cStart === 1.5 && ((isCadenceBar && Math.random() < 0.30) || (!isCadenceBar && Math.random() < (AppState.activePreset === 'minecraft' ? 0.22 : 0.10)))) {
+                // Breathing rest on final pulse of cadence bars or spacious ambient measures
+                if (cStart === 1.5 && ((isCadenceBar && Math.random() < 0.30) || (!isCadenceBar && Math.random() < dna.restChance))) {
                     rhEvents.push({ startBeat: 1.5, durationBeats: 1.5, notes: [], isRest: true });
                     continue;
                 }
 
                 if (!isCadenceBar && rhDensity === 3 && Math.random() < 0.52) {
-                    // True 3-eighth compound group
                     for (let k = 0; k < 3; k++) {
-                        const n = pickNextMelodyNote(cStart === 0 && k === 0, false);
+                        const n = pickNextMelodyNote(cStart === 0 && k === 0, false, k === 0);
                         rhEvents.push({
                             startBeat: cStart + k * 0.5,
                             durationBeats: 0.5,
@@ -717,15 +1112,14 @@ function generateNextMeasure() {
                         });
                     }
                 } else if (!(isCadenceBar && cStart === 1.5) && rhDensity >= 2 && Math.random() < (rhDensity === 2 ? 0.45 : 0.35)) {
-                    // Classic 6/8 quarter + eighth lilt (1.0 + 0.5)
-                    const n1 = pickNextMelodyNote(cStart === 0, false);
+                    const n1 = pickNextMelodyNote(cStart === 0, false, true);
                     rhEvents.push({
                         startBeat: cStart,
                         durationBeats: 1,
-                        notes: buildRhNoteArray(n1),
+                        notes: buildRhNoteArray(n1, cStart === 0),
                         isRest: false
                     });
-                    const n2 = pickNextMelodyNote(false, false);
+                    const n2 = pickNextMelodyNote(false, false, false);
                     rhEvents.push({
                         startBeat: cStart + 1,
                         durationBeats: 0.5,
@@ -733,12 +1127,11 @@ function generateNextMeasure() {
                         isRest: false
                     });
                 } else {
-                    // Dotted quarter resolution (preferred on cadence endings)
-                    const mainNote = pickNextMelodyNote(cStart === 0 || isCadenceBar, isFullCadenceBar && cStart === 1.5);
+                    const mainNote = pickNextMelodyNote(cStart === 0 || isCadenceBar, isFullCadenceBar && cStart === 1.5, cStart === 0 && !isCadenceBar);
                     rhEvents.push({
                         startBeat: cStart,
                         durationBeats: 1.5,
-                        notes: buildRhNoteArray(mainNote),
+                        notes: buildRhNoteArray(mainNote, cStart === 0),
                         isRest: false,
                         tieToNext: (cStart === 1.5 && allowOutgoingTie && Math.random() < 0.22)
                     });
@@ -748,6 +1141,18 @@ function generateNextMeasure() {
     } else {
         // Simple / Asymmetric meters (3/4, 4/4, 5/4)
         let beatCursor = 0;
+
+        // Satie / Gymnopédie trademark Beat-1 quarter-rest pickup (LH strikes bass alone, RH floats in on Beat 2!)
+        if (
+            !incomingTieNotes &&
+            !isFullCadenceBar &&
+            beatsPerMeasure >= 3 &&
+            Math.random() < dna.beatOnePickupChance
+        ) {
+            rhEvents.push({ startBeat: 0, durationBeats: 1, notes: [], isRest: true });
+            beatCursor = 1;
+        }
+
         while (beatCursor < beatsPerMeasure - 0.001) {
             const remaining = beatsPerMeasure - beatCursor;
 
@@ -773,11 +1178,11 @@ function generateNextMeasure() {
                     beatCursor += 1;
                     continue;
                 }
-                const cadNote = pickNextMelodyNote(true, isFullCadenceBar);
+                const cadNote = pickNextMelodyNote(true, isFullCadenceBar, false);
                 rhEvents.push({
                     startBeat: beatCursor,
                     durationBeats: remaining,
-                    notes: buildRhNoteArray(cadNote),
+                    notes: buildRhNoteArray(cadNote, true),
                     isRest: false,
                     tieToNext: false
                 });
@@ -785,8 +1190,8 @@ function generateNextMeasure() {
                 continue;
             }
 
-            // Intentional breathing rest (more likely at phrase breath or in Minecraft mode)
-            if (beatCursor > 0 && remaining >= 1 && Math.random() < (AppState.activePreset === 'minecraft' ? 0.24 : 0.12)) {
+            // Intentional breathing rest (governed by theme DNA: high in Voxel Ambient, lower in Licorice/Gonzales)
+            if (beatCursor > 0 && remaining >= 1 && ps.pendingResolutionMidi === null && Math.random() < dna.restChance) {
                 rhEvents.push({
                     startBeat: beatCursor,
                     durationBeats: 1,
@@ -797,24 +1202,50 @@ function generateNextMeasure() {
                 continue;
             }
 
+            // Chilly Gonzales / Zelda signature dotted-quarter + eighth lyrical lilt on beats 0 or 2 in 4/4
+            if (
+                (activePreset === 'gonzales' || activePreset === 'zelda') &&
+                !isCadenceBar &&
+                remaining >= 2 &&
+                (beatCursor === 0 || beatCursor === 2) &&
+                Math.random() < (activePreset === 'gonzales' ? 0.34 : 0.28)
+            ) {
+                const n1 = pickNextMelodyNote(beatCursor === 0, false, true);
+                rhEvents.push({
+                    startBeat: beatCursor,
+                    durationBeats: 1.5,
+                    notes: buildRhNoteArray(n1, beatCursor === 0),
+                    isRest: false
+                });
+                const n2 = pickNextMelodyNote(false, false, false);
+                rhEvents.push({
+                    startBeat: beatCursor + 1.5,
+                    durationBeats: 0.5,
+                    notes: [n2],
+                    isRest: false
+                });
+                beatCursor += 2;
+                continue;
+            }
+
             let dur = 1;
             if (rhDensity === 1) {
                 if (remaining >= 3 && beatsPerMeasure === 3) dur = 3;
                 else if (remaining >= 2) dur = 2;
                 else dur = 1;
             } else if (rhDensity === 2) {
-                if (remaining >= 2 && Math.random() < 0.42) dur = 2;
+                if (remaining >= 2 && Math.random() < (activePreset === 'gymnopedie' ? 0.62 : 0.45)) dur = 2;
                 else dur = 1;
             } else if (rhDensity === 3) {
                 if (remaining >= 1 && Math.random() < 0.48) {
-                    const n1 = pickNextMelodyNote(beatCursor === 0, false);
+                    const n1 = pickNextMelodyNote(beatCursor === 0, false, true);
                     rhEvents.push({
                         startBeat: beatCursor,
                         durationBeats: 0.5,
                         notes: [n1],
                         isRest: false
                     });
-                    const n2 = pickNextMelodyNote(false, false);
+                    const n2 = pickNextMelodyNote(false, false, false);
                     rhEvents.push({
                         startBeat: beatCursor + 0.5,
                         durationBeats: 0.5,
@@ -824,14 +1255,15 @@ function generateNextMeasure() {
                     beatCursor += 1;
                     continue;
                 } else {
-                    dur = (remaining >= 2 && Math.random() < 0.25) ? 2 : 1;
+                    dur = (remaining >= 2 && Math.random() < 0.28) ? 2 : 1;
                 }
             } else if (rhDensity === 4) {
                 dur = (remaining >= 2 && Math.random() < 0.45) ? 2 : 1;
             }
 
-            const mainNote = pickNextMelodyNote(beatCursor === 0, isFullCadenceBar && beatCursor + dur >= beatsPerMeasure);
-            const notes = buildRhNoteArray(mainNote);
+            const canSuspendHere = (beatCursor === 0 || beatCursor === 2) && (beatCursor + dur < beatsPerMeasure);
+            const mainNote = pickNextMelodyNote(beatCursor === 0, isFullCadenceBar && beatCursor + dur >= beatsPerMeasure, canSuspendHere);
+            const notes = buildRhNoteArray(mainNote, beatCursor === 0);
 
             rhEvents.push({
                 startBeat: beatCursor,
@@ -846,14 +1278,13 @@ function generateNextMeasure() {
     }
 
     // Capture Bar 0 motif shape (relative diatonic intervals + rhythm) for Bars 2 & 4 call-and-response
+    // Also persist Section A's Bar 0 motif so Sections A' and A'' recall the chapter's main theme!
     if (barInPeriod === 0 && !incomingTieNotes) {
         const firstPitched = rhEvents.find(e => !e.isRest && e.notes.length > 0);
         if (firstPitched) {
             const firstNoteMidi = firstPitched.notes[firstPitched.notes.length - 1];
             const anchorIdx = findClosestScaleIdx(firstNoteMidi);
-            ps.motifAnchorMidi = firstNoteMidi;
-            ps.motifTimeSig = timeSig;
-            ps.motifEvents = rhEvents.map(ev => {
+            const captured = rhEvents.map(ev => {
                 if (ev.isRest || ev.notes.length === 0) {
                     return { startBeat: ev.startBeat, durationBeats: ev.durationBeats, isRest: true, relStep: 0, wasChordal: false };
                 }
@@ -866,6 +1297,15 @@ function generateNextMeasure() {
                     wasChordal: ev.notes.length > 1
                 };
             });
+            ps.motifAnchorMidi = firstNoteMidi;
+            ps.motifTimeSig = timeSig;
+            ps.motifEvents = captured;
+
+            if (macroSectionIdx === 0) {
+                ps.sectionAMotif = captured.map(item => ({ ...item }));
+                ps.sectionAMotifTimeSig = timeSig;
+                ps.sectionAAnchorMidi = firstNoteMidi;
+            }
         }
     }
 
@@ -891,6 +1331,8 @@ function generateNextMeasure() {
         index: measureIndex,
         periodIndex,
         barInPeriod,
+        macroSection,
+        preset: activePreset,
         rootKey,
         mode,
         timeSig,
@@ -966,7 +1408,12 @@ function rebuildScoreStream() {
     AppState.lastVoicingMidis = [50, 57, 60, 64];
     AppState.generationRootKey = AppState.rootKey;
     AppState.phraseState.periodIdx = -1;
+    AppState.phraseState.macroChapterIdx = -1;
+    AppState.phraseState.macroSection = 'A';
+    AppState.phraseState.chordPlan = [];
     AppState.phraseState.motifEvents = [];
+    AppState.phraseState.sectionAMotif = [];
+    AppState.phraseState.pendingResolutionMidi = null;
 
     for (let i = 0; i < 16; i++) {
         AppState.measures.push(generateNextMeasure());
@@ -1022,7 +1469,9 @@ function refreshUpcomingMeasuresLive(applyCurrentIfPausedAtStart = true) {
     }
 
     AppState.phraseState.periodIdx = -1;
+    AppState.phraseState.chordPlan = [];
     AppState.phraseState.motifEvents = [];
+    AppState.phraseState.pendingResolutionMidi = null;
     ensureInfiniteBuffer();
     if (typeof resyncAudioScheduler === 'function') {
         resyncAudioScheduler();

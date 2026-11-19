@@ -703,12 +703,33 @@ function drawSingleMeasure(ctx, measure, measX, measWidth, trebleTopY, bassTopY,
         lowestBassY + (AppState.noteNameMode !== 'none' ? lineGap * 1.4 : lineGap * 0.7)
     );
 
-    // 1. Measure Number, Chord Symbol & Pedagogical Banner (Horizontally sequenced so they NEVER overlap)
+    // 1. Measure Number, Classical Rehearsal Mark (A / A' / B / A''), Chord Symbol & Pedagogical Banner
     ctx.save();
     ctx.font = `500 ${isCompact ? 9 : 10}px "JetBrains Mono", monospace`;
     drawHaloText(ctx, `${measure.index + 1}`, measX + 5, trebleTopY - (isCompact ? 6 : 8), palette.mutedInk, palette.bg, 2.5);
 
     let headerCursorX = measX + padLeft - 4;
+    if (measure.barInPeriod === 0 && measure.macroSection) {
+        const secLabel = measure.macroSection;
+        ctx.save();
+        ctx.font = `700 ${isCompact ? 9 : 10}px "JetBrains Mono", monospace`;
+        const boxW = Math.max(isCompact ? 16 : 18, Math.ceil(ctx.measureText(secLabel).width) + 8);
+        const boxH = isCompact ? 13 : 15;
+        const boxY = headerBaselineY - boxH + 3;
+        ctx.fillStyle = AppState.sheetTheme === 'dark' ? 'rgba(245, 158, 11, 0.16)' : 'rgba(180, 83, 9, 0.10)';
+        ctx.strokeStyle = palette.guideTone;
+        ctx.lineWidth = 1.05;
+        ctx.beginPath();
+        ctx.roundRect(headerCursorX, boxY, boxW, boxH, 3);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = palette.chordText;
+        ctx.textAlign = 'center';
+        ctx.fillText(secLabel, headerCursorX + boxW / 2, headerBaselineY);
+        ctx.restore();
+        headerCursorX += boxW + (isCompact ? 6 : 8);
+    }
+
     if (AppState.showChords) {
         ctx.font = `600 ${isCompact ? 14 : 16}px "Cormorant Garamond", Georgia, serif`;
         drawHaloText(ctx, measure.chord.symbol, headerCursorX, headerBaselineY, palette.chordText, palette.bg, 3.0);

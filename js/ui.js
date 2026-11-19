@@ -34,7 +34,8 @@ function updateHudInfo() {
     const measure = getMeasureByIndex(AppState.currentMeasureIndex);
     if (!measure) return;
     syncPlayheadKeyToUI();
-    document.getElementById('hudMeasureNum').textContent = `${measure.index + 1}`;
+    const secTag = measure.macroSection ? ` · ${measure.macroSection}` : '';
+    document.getElementById('hudMeasureNum').textContent = `${measure.index + 1}${secTag}`;
     document.getElementById('hudCurrentChord').textContent = measure.chord.symbol;
     document.getElementById('hudCurrentRoman').textContent = measure.chord.roman;
 
@@ -279,6 +280,7 @@ function applyStylePreset(presetKey) {
     document.getElementById('selectLeftHandPattern').value = p.leftHandPattern;
     document.getElementById('selectRightHandDensity').value = p.rightHandDensity;
     document.getElementById('selectIntervalLeap').value = p.intervalLeap;
+    if (p.soundType) setSoundType(p.soundType, false);
     setReverbAmount(p.reverb);
 
     updatePresetCardHighlights(presetKey);

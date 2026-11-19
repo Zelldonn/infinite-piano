@@ -70,10 +70,14 @@ const MODE_LABELS_FR = {
     mixolydian: 'Mixolydien'
 };
 
-// Contemplative Style Presets configuration
+// 32-bar macro-form labels: Section A -> A' (blossom) -> B (bridge contrast) -> A'' (warm return)
+const MACRO_SECTION_LABELS = ['A', "A'", 'B', "A''"];
+
+// Contemplative Style Presets configuration (6 signature piano worlds)
 const STYLE_PRESETS = {
     gymnopedie: {
         name: 'Gymnopédie',
+        soundType: 'classical',
         tempo: 66,
         rootKey: 'D',
         mode: 'dorian',
@@ -86,7 +90,8 @@ const STYLE_PRESETS = {
     },
     minecraft: {
         name: 'Voxel Ambient',
-        tempo: 72,
+        soundType: 'felt',
+        tempo: 68,
         rootKey: 'G',
         mode: 'lydian',
         timeSig: '4/4',
@@ -98,6 +103,7 @@ const STYLE_PRESETS = {
     },
     skyrim: {
         name: 'Nordique & Brume',
+        soundType: 'classical',
         tempo: 60,
         rootKey: 'D',
         mode: 'aeolian',
@@ -110,6 +116,7 @@ const STYLE_PRESETS = {
     },
     licorice: {
         name: 'Licorice Néo',
+        soundType: 'classical',
         tempo: 76,
         rootKey: 'F',
         mode: 'major',
@@ -119,8 +126,120 @@ const STYLE_PRESETS = {
         rightHandDensity: '3',
         intervalLeap: 'stepwise',
         reverb: 35
+    },
+    zelda: {
+        name: 'Hyrule & Fées',
+        soundType: 'classical',
+        tempo: 74,
+        rootKey: 'G',
+        mode: 'major',
+        timeSig: '4/4',
+        harmonicRichness: 'borrowed',
+        leftHandPattern: 'ostinato_eighths',
+        rightHandDensity: '2',
+        intervalLeap: 'moderate',
+        reverb: 44
+    },
+    gonzales: {
+        name: 'Solo Piano',
+        soundType: 'felt',
+        tempo: 80,
+        rootKey: 'C',
+        mode: 'aeolian',
+        timeSig: '4/4',
+        harmonicRichness: 'borrowed',
+        leftHandPattern: 'ostinato_eighths',
+        rightHandDensity: '3',
+        intervalLeap: 'stepwise',
+        reverb: 22
     }
 };
+
+// Per-theme compositional DNA: governs signature rhythms, voicings, suspensions, echoes, chord roll & rubato
+const THEME_DNA = {
+    gymnopedie: {
+        beatOnePickupChance: 0.56,   // Satie trademark: LH strikes beat 1 alone, RH floats in on beat 2
+        restChance: 0.14,
+        suspensionChance: 0.34,      // Floating 9th/4th color landings resolving softly
+        highEchoChance: 0.0,
+        heroicLeapChance: 0.08,
+        openTenthLh: false,
+        fairyWaveLh: false,
+        baroqueBassLh: false,
+        bridgeLhPattern: 'arpeggio_slow',
+        chordRollSec: 0.024,         // Lush warm LH chord roll
+        rubatoStrength: 1.15
+    },
+    minecraft: {
+        beatOnePickupChance: 0.16,
+        restChance: 0.30,            // Generous ambient silence & ringing air
+        suspensionChance: 0.36,      // Lydian #4->5 and add9 shimmer
+        highEchoChance: 0.28,        // Crystalline octave-up echo on phrase answers
+        heroicLeapChance: 0.10,
+        openTenthLh: true,           // Wide open Root - 5th - 10th spreads
+        fairyWaveLh: false,
+        baroqueBassLh: false,
+        bridgeLhPattern: 'sustained_voicing',
+        chordRollSec: 0.020,
+        rubatoStrength: 1.05
+    },
+    skyrim: {
+        beatOnePickupChance: 0.08,
+        restChance: 0.16,
+        suspensionChance: 0.24,
+        highEchoChance: 0.10,
+        heroicLeapChance: 0.42,      // Sweeping upward 5th/octave folk-heroic arch followed by stepwise fall
+        openTenthLh: false,
+        fairyWaveLh: false,
+        baroqueBassLh: false,
+        bridgeLhPattern: 'arpeggio_slow',
+        chordRollSec: 0.018,
+        rubatoStrength: 1.10
+    },
+    licorice: {
+        beatOnePickupChance: 0.06,
+        restChance: 0.10,
+        suspensionChance: 0.42,      // Cinematic yearning 4->3 & 9->8 appoggiaturas
+        highEchoChance: 0.12,
+        heroicLeapChance: 0.12,
+        openTenthLh: false,
+        fairyWaveLh: false,
+        baroqueBassLh: false,
+        bridgeLhPattern: 'arpeggio_slow',
+        chordRollSec: 0.015,
+        rubatoStrength: 0.95
+    },
+    zelda: {
+        beatOnePickupChance: 0.14,
+        restChance: 0.16,
+        suspensionChance: 0.46,      // Bittersweet Kondo suspensions (sus4->3, add9->1)
+        highEchoChance: 0.34,        // Shimmering Fairy Fountain high-register bell echo
+        heroicLeapChance: 0.26,      // Nostalgic Hyrule melody leaps
+        openTenthLh: false,
+        fairyWaveLh: true,           // Shimmering flowing 1-5-9-10-9-5 wave in LH
+        baroqueBassLh: false,
+        bridgeLhPattern: 'arpeggio_slow',
+        chordRollSec: 0.022,
+        rubatoStrength: 1.10
+    },
+    gonzales: {
+        beatOnePickupChance: 0.08,
+        restChance: 0.12,
+        suspensionChance: 0.52,      // Crisp Chilly Gonzales classical appoggiaturas & Baroque ornaments
+        highEchoChance: 0.08,
+        heroicLeapChance: 0.14,
+        openTenthLh: false,
+        fairyWaveLh: false,
+        baroqueBassLh: true,         // Tight Alberti / Solo Piano baroque walking-bass figure
+        bridgeLhPattern: 'satie',    // Intimate chordal pause in Bridge before returning to ostinato
+        chordRollSec: 0.009,         // Crisp intimate felt articulation
+        rubatoStrength: 0.85
+    }
+};
+
+function getThemeDNA(presetKey) {
+    return THEME_DNA[presetKey] || THEME_DNA.licorice;
+}
 
 /***********************************************************************
  * 2. APPLICATION STATE
@@ -168,17 +287,24 @@ const AppState = {
     lastFrameTime: 0,
     lastTriggeredSubBeat: -1,
 
-    // Voice-leading & Musical Phrasing memory for smooth 8-bar composition
+    // Voice-leading & Musical Phrasing memory for 32-bar (A - A' - B - A'') composition
     lastMelodyMidi: 69,      // A4
     lastChordDegree: 0,      // 0-indexed scale degree
     lastVoicingMidis: [50, 57, 60, 64],
     generatedMeasureCounter: 0,
     phraseState: {
         periodIdx: -1,
+        macroChapterIdx: -1,
+        macroSection: 'A',   // 'A' | "A'" | 'B' | "A''"
+        chordPlan: [],       // 8 entries: { deg, inv, borrowed }
         chordDegrees: [0, 3, 1, 4, 0, 3, 4, 0],
-        motifEvents: [],     // Captured melodic-rhythmic motif [{ startBeat, durationBeats, isRest, relStep }]
+        motifEvents: [],     // Current 8-bar period motif [{ startBeat, durationBeats, isRest, relStep, wasChordal }]
         motifTimeSig: '3/4',
-        motifAnchorMidi: 69
+        motifAnchorMidi: 69,
+        sectionAMotif: [],   // Saved Section A primary theme recalled tenderly in A' and A''
+        sectionAMotifTimeSig: '3/4',
+        sectionAAnchorMidi: 69,
+        pendingResolutionMidi: null // Active appoggiatura/suspension resolution target
     },
 
     // Active notes for MIDI Wait mode

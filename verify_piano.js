@@ -696,4 +696,87 @@ appState.isPlaying = false;
 assert.strictEqual(scheduler.timerId, null);
 assert.strictEqual(scheduler.anchors.length, 0);
 
-console.log('✓ All PWA, CSS, DOM, scheduler, audio, MIDI, bug-fix & integration checks passed!');
+// Test J: 6 Themes (incl. Zelda & Chilly Gonzales), 32-bar Macro-Form (A -> A' -> B -> A''), Inversions, Suspensions, Roll & Rubato
+const allSixPresets = ['gymnopedie', 'minecraft', 'skyrim', 'licorice', 'zelda', 'gonzales'];
+for (const pKey of allSixPresets) {
+    context.applyStylePreset(pKey);
+    // Generate full 32-bar chapter
+    while (appState.measures.length < 32) {
+        appState.measures.push(context.generateNextMeasure());
+    }
+    assert.strictEqual(appState.measures[0].macroSection, 'A', `${pKey}: bar 0 must be section A`);
+    assert.strictEqual(appState.measures[8].macroSection, "A'", `${pKey}: bar 8 must be section A'`);
+    assert.strictEqual(appState.measures[16].macroSection, 'B', `${pKey}: bar 16 must be section B`);
+    assert.strictEqual(appState.measures[24].macroSection, "A''", `${pKey}: bar 24 must be section A''`);
+
+    // Every bar across all 32 measures must have exact RH duration sum and clean cadence on bar 7/15/23/31
+    for (let i = 0; i < 32; i++) {
+        const m = appState.measures[i];
+        const rhSum = m.rhEvents.reduce((s, e) => s + e.durationBeats, 0);
+        assert(Math.abs(rhSum - m.beatsPerMeasure) < 1e-6, `${pKey} bar ${i}: RH sum ${rhSum} != ${m.beatsPerMeasure}`);
+        if (m.barInPeriod === 7) {
+            assert.strictEqual(m.chord.degree, 0, `${pKey} bar ${i}: period end must resolve to tonic`);
+        }
+    }
+
+    // Section A' (bar 8) and A'' (bar 24) recall Section A's primary rhythmic motif
+    const rA = appState.measures[0].rhEvents.map(e => e.durationBeats);
+    const rAp = appState.measures[8].rhEvents.map(e => e.durationBeats);
+    const rApp = appState.measures[24].rhEvents.map(e => e.durationBeats);
+    assert.deepStrictEqual([...rAp], [...rA], `${pKey}: Section A' must recall Section A motif rhythm`);
+    assert.deepStrictEqual([...rApp], [...rA], `${pKey}: Section A'' must recall Section A motif rhythm`);
+}
+
+// J2. Zelda ("Hyrule & Fées"): Iconic bVI -> bVII -> I bridge cadence & Fairy Wave LH
+context.applyStylePreset('zelda');
+while (appState.measures.length < 24) appState.measures.push(context.generateNextMeasure());
+const zeldaBridge = appState.measures.slice(16, 24);
+assert(zeldaBridge.some(m => m.chord.roman.startsWith('♭VI')), 'Zelda Section B must include heroic ♭VI chord');
+assert(zeldaBridge.some(m => m.chord.roman.startsWith('♭VII')), 'Zelda Section B must include heroic ♭VII chord');
+assert.strictEqual(zeldaBridge[7].chord.degree, 0, 'Zelda Section B must resolve home to I');
+
+// J3. Chilly Gonzales ("Solo Piano"): Felt timbre, dry reverb, 1st-inversion slash bass & harmonic-minor V7 (raised B♮ in C minor)
+context.applyStylePreset('gonzales');
+assert.strictEqual(appState.soundType, 'felt', 'Chilly Gonzales preset must default to felt piano');
+assert.strictEqual(appState.rootKey, 'C');
+assert.strictEqual(appState.mode, 'aeolian');
+while (appState.measures.length < 24) appState.measures.push(context.generateNextMeasure());
+const hasV7WithLeadingTone = appState.measures.some(m => m.chord.roman.startsWith('V7') && m.chord.chordPcs.includes(11));
+assert(hasV7WithLeadingTone, 'Chilly Gonzales in C minor must feature harmonic-minor V7 (G7 with B♮)');
+const firstInvMeas = appState.measures.find(m => m.chord.inversion === 'first');
+assert(firstInvMeas, 'Chilly Gonzales must include 1st-inversion walking slash chords');
+assert.strictEqual(context.midiToPc(firstInvMeas.voicingMidis[0]), firstInvMeas.chord.thirdPc, '1st inversion must put chord 3rd in bass');
+
+// J4. Nordic ("Nordique & Brume") tonic pedal drone puts modal tonic in bass
+const pedalChord = context.buildContemplativeChord('D', 'aeolian', 6, 'sevenths', 'skyrim', { deg: 6, inv: 'pedal', borrowed: null });
+assert.strictEqual(pedalChord.inversion, 'pedal');
+assert.strictEqual(pedalChord.bassPc, 2, 'D Aeolian pedal chord must keep D (pc 2) in bass');
+const pedalVoicing = context.buildSmoothLeftHandVoicing(pedalChord, [38, 53, 57, 60]);
+assert.strictEqual(context.midiToPc(pedalVoicing.bassMidi), 2);
+
+// J5. Humanization: Soft Rolled Chords stagger timestamps upward & Cadence Rubato breathes on Bar 7
+context.applyStylePreset('gymnopedie');
+const origPlayNote = engine.playNote.bind(engine);
+const playedTimes = [];
+engine.playNote = (midi, dur, vel, when) => { playedTimes.push({ midi, when }); return origPlayNote(midi, dur, vel, when); };
+const satieMeas = appState.measures[0];
+// Beat 1 of Gymnopédie Satie LH has a 3-note block chord
+context.triggerMeasureBeatAudio(satieMeas, 1, true, 5.0);
+engine.playNote = origPlayNote;
+const lhRollTimes = playedTimes.filter(x => x.midi < 68).map(x => x.when);
+assert(lhRollTimes.length >= 2 && lhRollTimes[1] > lhRollTimes[0], 'Multi-note LH chord must softly roll bottom-to-top');
+
+appState.tempo = 72;
+const tempoBar0 = context.getEffectiveTempoForSubBeat({ barInPeriod: 0, beatsPerMeasure: 4, preset: 'zelda' }, 0);
+const tempoBar7End = context.getEffectiveTempoForSubBeat({ barInPeriod: 7, beatsPerMeasure: 4, preset: 'zelda' }, 3);
+assert.strictEqual(tempoBar0, 72);
+assert(tempoBar7End < 68, `Bar 7 cadence rubato (${tempoBar7End.toFixed(1)}) must slow gently below 72 BPM`);
+
+// Smoke-render rehearsal marks (A, A', B, A'') across Ribbon & Page views
+appState.currentMeasureIndex = 16;
+appState.viewLayout = 'ribbon';
+context.renderScore();
+appState.viewLayout = 'page';
+context.renderScore();
+
+console.log('✓ All PWA, CSS, DOM, scheduler, audio, MIDI, 6-theme composer, 32-bar form & integration checks passed!');
